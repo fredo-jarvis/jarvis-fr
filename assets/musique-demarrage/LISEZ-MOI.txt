@@ -1,0 +1,3 @@
+Dépose ici UNE musique (.mp3 ou .wav).
+Jarvis la joue quand il s'ouvre, pendant 25 secondes, puis la baisse doucement.
+Pour la couper : mettre "musique_demarrage": false dans memory/interface.json.
