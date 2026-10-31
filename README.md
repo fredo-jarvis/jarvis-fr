@@ -1,7 +1,3 @@
-> ⚠️ **Branche BÊTA (version 1.1 en test)** — réservée aux bêta-testeurs. Elle s'installe à côté de la version normale (dossier `Jarvis-Mark-LV-beta`, raccourci « Jarvis BETA ») avec :
-> `irm https://raw.githubusercontent.com/fredo-jarvis/jarvis-fr/beta/installer.ps1 | iex`
-> Signale les bugs dans l'onglet **Issues** de GitHub ou en commentaire sur le post Facebook. Merci !
-
 <div align="center">
 
 # J.A.R.V.I.S — Mark LV · Édition française
