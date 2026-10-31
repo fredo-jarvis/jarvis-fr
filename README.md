@@ -1,3 +1,7 @@
+> ⚠️ **Branche BÊTA (version 1.1 en test)** — réservée aux bêta-testeurs. Elle s'installe à côté de la version normale (dossier `Jarvis-Mark-LV-beta`, raccourci « Jarvis BETA ») avec :
+> `irm https://raw.githubusercontent.com/fredo-jarvis/jarvis-fr/beta/installer.ps1 | iex`
+> Signale les bugs dans l'onglet **Issues** de GitHub ou en commentaire sur le post Facebook. Merci !
+
 <div align="center">
 
 # J.A.R.V.I.S — Mark LV · Édition française
@@ -174,6 +178,7 @@ Remplace `TON-NOM` par ton nom de session Windows (celui qui apparaît dans `C:\
 | 📈 **Vrais chiffres du PC** | Processeur par cœur, mémoire, disques, réseau, temps de marche, en direct |
 | 🧘 **Mode calme** | Rien ne bouge à part les lumières, pour ne pas fatiguer les yeux |
 | 📱 **Télécommande** | Pilote Jarvis depuis ton téléphone (QR code) |
+| ✋ **Cerveau en hologramme** *(nouveau en 1.1)* | « Jarvis, montre-moi le cerveau en hologramme » : tes dossiers deviennent des bulles bleues. **Avec une webcam**, tu les attrapes et les lances avec la main (pincer, écarter les mains pour zoomer) ; **sans webcam**, tout marche à la souris. Les images de la caméra ne quittent jamais ton PC |
 
 ---
 
@@ -181,7 +186,7 @@ Remplace `TON-NOM` par ton nom de session Windows (celui qui apparaît dans `C:\
 
 Le cerveau est un **wiki personnel** : un dossier de pages Markdown (`Documents\Cerveau`), que l'installation crée **vide** avant le premier lancement. Deux assistants s'en occupent :
 
-- **Jarvis** (la voix) lit la *fiche du cerveau* à chaque démarrage, cherche et lit les pages quand tu lui poses une question, et écrit ses notes dans un **carnet**. Il ne touche jamais aux pages du wiki.
+- **Jarvis** (la voix) lit la *fiche du cerveau* à chaque démarrage, cherche et lit les pages quand tu lui poses une question, et écrit ses notes dans un **carnet**. Il tient aussi lui-même ta page **« Moi »** (`wiki/entites/moi.md` : prénom, ville, goûts, projets) et une ligne dans le **journal** à chaque fin de séance : ton cerveau se remplit même sans Claude Code.
 - **Claude Code** (l'écrit) range les notes du carnet, écrit et relie les pages, et tient la fiche à jour.
 
 ### Installer le cerveau, étape par étape
@@ -295,6 +300,9 @@ La documentation d'origine (en anglais) est gardée dans [`docs/README-original-
 | Idée du « mode acide » (*modo ácido*) | jgm-source / jarvis-opensource | — | Inspiration du mode humour (code réécrit) |
 | [jarvis-plugins](https://github.com/upgraderguy777/jarvis-plugins) : enregistreur d'écran, « montre-moi où cliquer » | upgraderguy777 | MIT | Adaptés en français |
 | Contrôle de YouTube | Gemind | MIT | Adapté en français |
+| [HOLO](https://github.com/zubair-trabzada/holo-gestures) (commande par gestes de la main) | Zubair Trabzada / AI Workshop Studio | MIT | Le cerveau en hologramme, traduit et passé en bleu (`holo/LICENSE`) |
+| [MediaPipe](https://github.com/google-ai-edge/mediapipe) | Google | Apache 2.0 | Le suivi des mains par webcam |
+| [three.js](https://github.com/mrdoob/three.js) | three.js | MIT | La 3D de l'hologramme |
 | [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) | Riverbank Computing | GPL v3 | L'interface |
 | [google-genai](https://github.com/googleapis/python-genai) | Google | Apache 2.0 | Gemini et Gemini Live |
 | [psutil](https://github.com/giampaolo/psutil) | Giampaolo Rodola | BSD-3 | Les chiffres du PC |

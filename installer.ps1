@@ -1,8 +1,10 @@
 ﻿# ─────────────────────────────────────────────────────────────────────────────
 #  Installation de Jarvis (Mark LV, version française) — Windows 10 / 11
 #
-#  Une seule ligne à coller dans PowerShell :
-#     irm https://raw.githubusercontent.com/fredo-jarvis/jarvis-fr/main/installer.ps1 | iex
+#  VERSION BÊTA (1.1) — réservée aux testeurs. Ligne à coller dans PowerShell :
+#     irm https://raw.githubusercontent.com/fredo-jarvis/jarvis-fr/beta/installer.ps1 | iex
+#  Elle s'installe À CÔTÉ de la version normale (dossier Jarvis-Mark-LV-beta, raccourci
+#  « Jarvis BETA ») et partage le même cerveau.
 #
 #  Ce que fait ce script, dans l'ordre :
 #    1. installe Python 3.12 s'il manque (avec winget, l'outil officiel de Windows) ;
@@ -12,10 +14,11 @@
 #    5. pose un raccourci « Jarvis » sur le bureau.
 #  Relancer le script met Jarvis à jour sans toucher à la clé, à la mémoire ni au cerveau.
 # ─────────────────────────────────────────────────────────────────────────────
-param([string]$Raccourci = "Jarvis")
+param([string]$Raccourci = "Jarvis BETA")
 $ErrorActionPreference = "Stop"
 $Depot   = "fredo-jarvis/jarvis-fr"                       # « compte/projet » sur GitHub
-$Dossier = Join-Path $env:USERPROFILE "Jarvis-Mark-LV"
+$Branche = "beta"                                         # version bêta : branche « beta »
+$Dossier = Join-Path $env:USERPROFILE "Jarvis-Mark-LV-beta"
 
 function Etape($texte) { Write-Host ""; Write-Host "==> $texte" -ForegroundColor Cyan }
 
@@ -41,7 +44,7 @@ if ($ici -and (Test-Path (Join-Path $ici "main.py"))) {
     Etape "Téléchargement de Jarvis"
     $zip = Join-Path $env:TEMP "jarvis-mark-lv.zip"
     $tmp = Join-Path $env:TEMP "jarvis-mark-lv"
-    Invoke-WebRequest "https://github.com/$Depot/archive/refs/heads/main.zip" -OutFile $zip
+    Invoke-WebRequest "https://github.com/$Depot/archive/refs/heads/$Branche.zip" -OutFile $zip
     if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
     Expand-Archive $zip -DestinationPath $tmp
     $source = (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName

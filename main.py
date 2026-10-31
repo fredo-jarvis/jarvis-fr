@@ -1154,7 +1154,7 @@ class JarvisLive:
                 "understood and ask for a yes before saving (\"Julie, c'est bien ça ?\"); if it is "
                 "wrong, ask them to spell it. After EACH confirmed answer, save it at once with save_memory "
                 "(identity: key 'name' for the first name, address_preference, city, job, email; preferences: hobbies; "
-                "projects: current_projects). They may skip any question. At the end, call "
+                "projects: current_projects). They may skip any question: if they skip or do not know, save NOTHING for it (never save 'unknown'). At the end, call "
                 "noter_dans_cerveau once with 'PRÉSENTATION : ' and everything learned, thank them, "
                 "and tell them what you can do for them in two sentences.\n")
         if mem_str:
@@ -1292,14 +1292,20 @@ class JarvisLive:
             category = args.get("category", "notes")
             key      = args.get("key", "")
             value    = args.get("value", "")
-            if key and value:
+            # Rien à garder quand la personne a passé la question (test du 31/10 : « unknown »)
+            _vide = str(value).strip().lower() in ("", "unknown", "inconnu", "inconnue", "n/a", "none",
+                                                   "non renseigné", "not provided", "not specified")
+            _ancien = ((load_memory().get(category) or {}).get(key) or {})
+            _deja = isinstance(_ancien, dict) and str(_ancien.get("value", "")).strip().lower() == str(value).strip().lower()
+            if key and not _vide and not _deja:
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
-                # Le cerveau aussi : chaque fait appris part dans le carnet, que Claude Code
-                # range ensuite dans les pages du wiki.
+                # Le cerveau aussi : le fait part dans le carnet (rangé ensuite par Claude Code)
+                # et la page « Moi » du cerveau est remise à jour tout de suite.
                 try:
-                    from plugins._cerveau_commun import noter as _noter
+                    from plugins._cerveau_commun import noter as _noter, page_moi as _page_moi
                     _noter(f"MÉMOIRE : {category} / {key} = {value}")
+                    _page_moi(load_memory())
                 except Exception as _e:
                     print(f"[Cerveau] carnet non écrit : {_e}")
             if not self.ui.muted:
@@ -2170,6 +2176,11 @@ class JarvisLive:
             )
             if summary:
                 save_session_summary(summary, lang)
+                try:
+                    from plugins._cerveau_commun import journal as _journal
+                    _journal(summary)          # une ligne dans le journal du cerveau
+                except Exception as _e:
+                    print(f"[Cerveau] journal non écrit : {_e}")
         except Exception as e:
             print(f"[Memory] ⚠️ Session summary failed: {e}")
 
