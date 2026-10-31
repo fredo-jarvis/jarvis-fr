@@ -18,6 +18,17 @@ Interface holographique en 4K, mémoire à long terme et un « second cerveau »
 
 [![Regarder le tuto d'installation sur YouTube](docs/miniature-tuto.png)](https://youtu.be/9UM3858yk6A)
 
+### 🔜 Bientôt : la version 1.1 (en cours de développement)
+
+Une nouvelle version de Jarvis FR est en préparation. Sa grande nouveauté : **le cerveau en hologramme**.
+
+Dis « *Jarvis, montre-moi le cerveau en hologramme* » : tes dossiers apparaissent sous forme de bulles lumineuses bleues, que tu peux **manipuler avec les gestes de la main** devant ta webcam. Tu peux les attraper, les lancer, les ouvrir, et écarter les deux mains pour zoomer.
+
+- 🎥 **Avec une webcam :** c'est là que l'hologramme prend tout son sens, on le pilote vraiment à la main.
+- 🖱️ **Sans webcam :** tout reste possible à la souris.
+
+La version 1.1 sortira dès qu'elle aura été bien testée. Pour suivre sa sortie, clique sur ⭐ **Star** ou 👁️ **Watch** en haut de cette page.
+
 </div>
 
 ---
