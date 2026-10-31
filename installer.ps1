@@ -78,7 +78,7 @@ if (-not (Test-Path $cerveau)) {
 }
 
 # 5. Raccourci sur le bureau ---------------------------------------------------
-Etape "Raccourci « Jarvis » sur le bureau"
+Etape "Raccourci « $Raccourci » sur le bureau"
 $sh = New-Object -ComObject WScript.Shell
 $lnk = $sh.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "$Raccourci.lnk"))
 $lnk.TargetPath = Join-Path $Dossier "Lancer-Jarvis.bat"
