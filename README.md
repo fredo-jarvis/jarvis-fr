@@ -14,6 +14,10 @@ Interface holographique en 4K, mémoire à long terme et un « second cerveau »
 
 *Version française améliorée et non officielle de [**Mark LV**](https://www.youtube.com/@FatihMakes), le Jarvis open source de **FatihMakes**.*
 
+### 📺 [Le tuto vidéo : installer Jarvis pas à pas (4 min)](https://youtu.be/9UM3858yk6A)
+
+[![Regarder le tuto d'installation sur YouTube](docs/miniature-tuto.png)](https://youtu.be/9UM3858yk6A)
+
 </div>
 
 ---
