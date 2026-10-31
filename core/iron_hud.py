@@ -21,6 +21,7 @@ import random
 import subprocess
 import threading
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -112,17 +113,61 @@ def decor_cercle() -> bool:
     return True
 
 
-LIEU = {"ville": "Paris", "lat": 48.857, "lon": 2.352}
+DEFAUT = {"ville": "Paris", "lat": 48.857, "lon": 2.352}
+LIEU = dict(DEFAUT)
+MEMOIRE = BASE / "memory" / "long_term.json"
+GEO_CACHE = BASE / "memory" / "meteo_lieu.json"
+
+
+def _ville_memoire() -> str:
+    """La ville apprise par Jarvis (première rencontre ou « j'habite à… »)."""
+    try:
+        entree = (json.loads(MEMOIRE.read_text(encoding="utf-8")).get("identity") or {}).get("city") or {}
+        return (entree.get("value", "") if isinstance(entree, dict) else str(entree)).strip()
+    except Exception:
+        return ""
+
+
+def _geocoder(ville: str) -> dict | None:
+    """Coordonnées d'une ville (Open-Meteo, gratuit), gardées en cache dans memory/meteo_lieu.json."""
+    try:
+        cache = json.loads(GEO_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        cache = {}
+    if ville in cache:
+        return cache[ville]
+    try:
+        url = ("https://geocoding-api.open-meteo.com/v1/search?count=1&language=fr&format=json&name="
+               + urllib.parse.quote(ville))
+        with urllib.request.urlopen(url, timeout=10) as r:
+            res = (json.loads(r.read().decode("utf-8")).get("results") or [None])[0]
+        if not res:
+            return None
+        cache[ville] = {"ville": res["name"], "lat": float(res["latitude"]), "lon": float(res["longitude"])}
+        GEO_CACHE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+        return cache[ville]
+    except Exception:
+        return None
 
 
 def _lieu() -> dict:
-    """Ville de la météo : réglages "ville", "latitude", "longitude" de memory/interface.json."""
+    """Ville de la météo, dans l'ordre : réglage "ville" de memory/interface.json s'il a été
+    changé, sinon la ville apprise par Jarvis (bug signalé par Abdel le 31/10 : elle n'était
+    jamais utilisée et l'écran restait sur Paris), sinon Paris."""
     try:
         r = json.loads(INTERFACE.read_text(encoding="utf-8"))
-        return {"ville": r.get("ville", "Paris"), "lat": float(r.get("latitude", 48.857)),
-                "lon": float(r.get("longitude", 2.352))}
     except Exception:
-        return dict(LIEU)
+        r = {}
+    ville = (r.get("ville") or "").strip()
+    par_defaut = ville in ("", "Paris") and float(r.get("latitude", 48.857)) == 48.857
+    if ville and not par_defaut:
+        return {"ville": ville, "lat": float(r.get("latitude", 48.857)), "lon": float(r.get("longitude", 2.352))}
+    apprise = _ville_memoire()
+    if apprise:
+        trouvee = _geocoder(apprise)
+        if trouvee:
+            return trouvee
+    return dict(DEFAUT)
 
 
 def mode_holo() -> bool:
@@ -142,6 +187,7 @@ class _Donnees:
         self._pc_t = 0.0
         self.corbeille = (0.0, 0)
         self._corb_t = 0.0
+        self._ville_vue, self._ville_t = _ville_memoire(), 0.0
         try:
             psutil.cpu_percent(None)
             self.demarrage = psutil.boot_time()
@@ -160,6 +206,11 @@ class _Donnees:
         if now - self._corb_t > 15.0:
             self._corb_t = now
             self.corbeille = _taille_corbeille()
+        if now - self._ville_t > 20.0:           # Jarvis vient d'apprendre une ville : météo à refaire
+            self._ville_t = now
+            v = _ville_memoire()
+            if v != self._ville_vue:
+                self._ville_vue, self._meteo_t = v, 0.0
         if now - self._meteo_t > 1800:
             self._meteo_t = now
             threading.Thread(target=self._charger_meteo, daemon=True).start()
