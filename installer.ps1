@@ -1,4 +1,4 @@
-﻿# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 #  Installation de Jarvis (Mark LV, version française) — Windows 10 / 11
 #
 #  Une seule ligne à coller dans PowerShell :
@@ -12,7 +12,8 @@
 #    5. pose un raccourci « Jarvis » sur le bureau.
 #  Relancer le script met Jarvis à jour sans toucher à la clé, à la mémoire ni au cerveau.
 # ─────────────────────────────────────────────────────────────────────────────
-param([string]$Raccourci = "Jarvis")
+# Nom du raccourci : "Jarvis", sauf si la variable JARVIS_RACCOURCI en donne un autre (tests).
+$Raccourci = if ($env:JARVIS_RACCOURCI) { $env:JARVIS_RACCOURCI } else { "Jarvis" }
 $ErrorActionPreference = "Stop"
 $Depot   = "fredo-jarvis/jarvis-fr"                       # « compte/projet » sur GitHub
 $Dossier = Join-Path $env:USERPROFILE "Jarvis-Mark-LV"
@@ -33,7 +34,7 @@ if (-not $py) {
 }
 
 # 2. Les fichiers de Jarvis ----------------------------------------------------
-$ici = if ($PSScriptRoot) { $PSScriptRoot } else { "" }
+$ici = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 if ($ici -and (Test-Path (Join-Path $ici "main.py"))) {
     $Dossier = $ici                                     # lancé depuis un dossier déjà téléchargé
     Etape "Jarvis est déjà là : $Dossier"
@@ -74,7 +75,7 @@ if (-not (Test-Path $cerveau)) {
 }
 
 # 5. Raccourci sur le bureau ---------------------------------------------------
-Etape "Raccourci « Jarvis » sur le bureau"
+Etape "Raccourci « $Raccourci » sur le bureau"
 $sh = New-Object -ComObject WScript.Shell
 $lnk = $sh.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "$Raccourci.lnk"))
 $lnk.TargetPath = Join-Path $Dossier "Lancer-Jarvis.bat"
