@@ -1,4 +1,4 @@
-﻿# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 #  Installation de Jarvis (Mark LV, version française) — Windows 10 / 11
 #
 #  VERSION BÊTA (1.1) — réservée aux testeurs. Ligne à coller dans PowerShell :
@@ -14,7 +14,8 @@
 #    5. pose un raccourci « Jarvis » sur le bureau.
 #  Relancer le script met Jarvis à jour sans toucher à la clé, à la mémoire ni au cerveau.
 # ─────────────────────────────────────────────────────────────────────────────
-param([string]$Raccourci = "Jarvis BETA")
+# Nom du raccourci : "Jarvis BETA", sauf si la variable JARVIS_RACCOURCI en donne un autre (tests).
+$Raccourci = if ($env:JARVIS_RACCOURCI) { $env:JARVIS_RACCOURCI } else { "Jarvis BETA" }
 $ErrorActionPreference = "Stop"
 $Depot   = "fredo-jarvis/jarvis-fr"                       # « compte/projet » sur GitHub
 $Branche = "beta"                                         # version bêta : branche « beta »
@@ -36,7 +37,7 @@ if (-not $py) {
 }
 
 # 2. Les fichiers de Jarvis ----------------------------------------------------
-$ici = if ($PSScriptRoot) { $PSScriptRoot } else { "" }
+$ici = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 if ($ici -and (Test-Path (Join-Path $ici "main.py"))) {
     $Dossier = $ici                                     # lancé depuis un dossier déjà téléchargé
     Etape "Jarvis est déjà là : $Dossier"

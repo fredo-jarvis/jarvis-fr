@@ -19,7 +19,7 @@ Write-Host "  3. Reviens dans cette fenêtre, fais un clic droit pour coller la 
 Write-Host ""
 
 while ($true) {
-    $cle = (Read-Host "Colle ta clé Gemini ici (ou Entrée pour le faire plus tard)").Trim()
+    $cle = "$(Read-Host "Colle ta clé Gemini ici (ou Entrée pour le faire plus tard)")".Trim()
     if (-not $cle) {
         Write-Host "D'accord : Jarvis te la demandera à son premier lancement."
         return
