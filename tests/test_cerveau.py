@@ -434,12 +434,19 @@ class TestHologrammeSOuvre(unittest.TestCase):
             essais["n"] += 1
             return essais["n"] > 60          # répond après 60 essais de 0,2 s (12 secondes)
 
-        anciens = h._serveur_actif, h.subprocess.Popen, h.time.sleep
-        h._serveur_actif, h.subprocess.Popen, h.time.sleep = actif, lambda *a, **k: None, lambda s: None
-        try:
-            self.assertTrue(h._demarrer_serveur())
-        finally:
-            h._serveur_actif, h.subprocess.Popen, h.time.sleep = anciens
+        import tempfile
+        anciens = h._serveur_actif, h.subprocess.Popen, h.time.sleep, h.HOLO
+        with tempfile.TemporaryDirectory() as tmp:     # holo.json du projet : à ne pas réécrire
+            h._serveur_actif, h.subprocess.Popen, h.time.sleep = actif, lambda *a, **k: None, lambda s: None
+            h.HOLO = Path(tmp)
+            try:
+                self.assertTrue(h._demarrer_serveur())
+            finally:
+                h._serveur_actif, h.subprocess.Popen, h.time.sleep, h.HOLO = anciens
+
+    def test_holo_json_publie_sans_chemin_personnel(self):
+        import json
+        self.assertEqual(json.loads((RACINE / "holo" / "holo.json").read_text(encoding="utf-8")).get("folder"), "")
 
     def test_navigateur_en_panne_on_ouvre_le_navigateur_par_defaut(self):
         import plugins.cerveau_hologramme as h
