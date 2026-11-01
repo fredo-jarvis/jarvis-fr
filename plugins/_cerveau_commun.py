@@ -103,6 +103,15 @@ CLES = {"name": "Prénom", "first_name": "Prénom", "address_preference": "Comme
         "hobbies": "Loisirs", "current_projects": "Projets en cours"}
 
 
+VALEURS_VIDES = ("", "unknown", "inconnu", "inconnue", "n/a", "none", "non renseigné",
+                 "not provided", "not specified")
+
+
+def valeur_vide(valeur) -> bool:
+    """Vrai si la personne a passé la question : rien à garder (test du 31/10 : « unknown »)."""
+    return str(valeur).strip().lower() in VALEURS_VIDES
+
+
 def page_moi(memoire: dict) -> None:
     """Réécrit wiki/entites/moi.md à partir de la mémoire de Jarvis."""
     lignes = ["# Moi", "", "Page tenue à jour par Jarvis à partir de ce qu'il a appris sur moi.",

@@ -1293,8 +1293,8 @@ class JarvisLive:
             key      = args.get("key", "")
             value    = args.get("value", "")
             # Rien à garder quand la personne a passé la question (test du 31/10 : « unknown »)
-            _vide = str(value).strip().lower() in ("", "unknown", "inconnu", "inconnue", "n/a", "none",
-                                                   "non renseigné", "not provided", "not specified")
+            from plugins._cerveau_commun import valeur_vide as _valeur_vide
+            _vide = _valeur_vide(value)
             _ancien = ((load_memory().get(category) or {}).get(key) or {})
             _deja = isinstance(_ancien, dict) and str(_ancien.get("value", "")).strip().lower() == str(value).strip().lower()
             if key and not _vide and not _deja:
