@@ -71,7 +71,7 @@ def _demarrer_serveur() -> bool:
     subprocess.Popen([_python_sans_fenetre(), str(HOLO / "server.py")], cwd=str(HOLO),
                      creationflags=CREATE_NO_WINDOW,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(25):
+    for _ in range(100):        # 20 secondes : un PC lent ou un antivirus peut retarder le démarrage
         if _serveur_actif():
             return True
         time.sleep(0.2)
@@ -108,9 +108,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if not _demarrer_serveur():
         return "The hologram server did not start (port 4890)."
     nav = _navigateur()
-    if nav:
+    try:
+        if not nav:
+            raise OSError("pas de Chrome ni d'Edge trouvé")
         subprocess.Popen([nav, f"--app={ADRESSE}", "--start-maximized"])
-    else:
+    except Exception as e:
+        print(f"[Hologramme] navigateur par défaut à la place : {e}")
         webbrowser.open(ADRESSE)
     return ("Brain hologram opened on screen. With a webcam: pinch an orb to open it, throw cards, "
             "spread two hands to zoom. Without a webcam: click an orb, drag cards with the mouse, "

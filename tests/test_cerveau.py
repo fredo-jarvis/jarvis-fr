@@ -422,6 +422,64 @@ class TestFichiersRetenus(unittest.TestCase):
             lf.repondre = reel
 
 
+class TestHologrammeSOuvre(unittest.TestCase):
+    """Des clients (01/11) : « le cerveau en hologramme ne s'ouvre pas »."""
+
+    def test_serveur_lent_on_attend_assez_longtemps(self):
+        # PC lent ou antivirus : le serveur peut mettre plus de 5 secondes à démarrer.
+        import plugins.cerveau_hologramme as h
+        essais = {"n": 0}
+
+        def actif():
+            essais["n"] += 1
+            return essais["n"] > 60          # répond après 60 essais de 0,2 s (12 secondes)
+
+        anciens = h._serveur_actif, h.subprocess.Popen, h.time.sleep
+        h._serveur_actif, h.subprocess.Popen, h.time.sleep = actif, lambda *a, **k: None, lambda s: None
+        try:
+            self.assertTrue(h._demarrer_serveur())
+        finally:
+            h._serveur_actif, h.subprocess.Popen, h.time.sleep = anciens
+
+    def test_navigateur_en_panne_on_ouvre_le_navigateur_par_defaut(self):
+        import plugins.cerveau_hologramme as h
+        ouvert = []
+
+        def panne(*a, **k):
+            raise OSError("navigateur introuvable")
+
+        anciens = h._demarrer_serveur, h._navigateur, h.subprocess.Popen, h.webbrowser.open
+        h._demarrer_serveur, h._navigateur = (lambda: True), (lambda: "C:/chrome.exe")
+        h.subprocess.Popen, h.webbrowser.open = panne, ouvert.append
+        try:
+            self.assertIn("opened", h.run({"action": "open"}))
+        finally:
+            h._demarrer_serveur, h._navigateur, h.subprocess.Popen, h.webbrowser.open = anciens
+        self.assertEqual(ouvert, [h.ADRESSE])
+
+
+class TestCerveauDansOneDrive(unittest.TestCase):
+    """L'installateur crée le cerveau dans le vrai dossier Documents de Windows, souvent dans OneDrive :
+    Jarvis doit le chercher au même endroit, pas dans <profil>\\Documents."""
+
+    def test_cerveau_dans_le_vrai_dossier_documents(self):
+        import plugins._cerveau_commun as cc
+        ancien = cc._documents
+        cc._documents = lambda: Path("D:/OneDrive/Documents")
+        try:
+            import json
+            reglages = json.loads((RACINE / "memory" / "interface.json").read_text(encoding="utf-8"))
+            if reglages.get("cerveau"):
+                self.skipTest("réglage « cerveau » personnalisé sur ce PC")
+            self.assertEqual(cc._chemin_cerveau(), Path("D:/OneDrive/Documents/Cerveau"))
+        finally:
+            cc._documents = ancien
+
+    def test_documents_de_windows_trouve(self):
+        import plugins._cerveau_commun as cc
+        self.assertTrue(cc._documents().name)
+
+
 class TestActusDuBriefing(unittest.TestCase):
     """Demande de Fredo (01/11) : actualités locales au démarrage plutôt que celles du monde."""
 
