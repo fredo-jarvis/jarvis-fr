@@ -5190,6 +5190,9 @@ class MainWindow(QMainWindow):
         size = _fmt_size(p.stat().st_size)
         self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  Tell {self._assistant_name} what to do with it")
         self._log.append_log(f"FILE: {p.name} ({size}) loaded")
+        # Retenu tout de suite, pour les prochaines séances (même si Jarvis dort ou n'est pas connecté)
+        from core.fichiers_retenus import retenir
+        threading.Thread(target=retenir, args=(path,), daemon=True).start()
         if self.on_text_command:
             msg = (
                 f"[FILE_UPLOADED] path={path} | name={p.name} | "
