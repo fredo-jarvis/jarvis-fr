@@ -178,5 +178,141 @@ class TestFichierDepose(unittest.TestCase):
         self.assertIn("[UPLOADED FILES]", (RACINE / "core" / "prompt.txt").read_text(encoding="utf-8"))
 
 
+def _pdf_avec_texte(chemin, texte):
+    """Un vrai petit PDF avec du texte (écrit à la main, sans bibliothèque)."""
+    flux = f"BT /F1 18 Tf 72 720 Td ({texte}) Tj ET".encode("latin-1")
+    objets = [b"<< /Type /Catalog /Pages 2 0 R >>",
+              b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+              b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+              b"/Resources << /Font << /F1 5 0 R >> >> >>",
+              b"<< /Length %d >>\nstream\n" % len(flux) + flux + b"\nendstream",
+              b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, positions = b"%PDF-1.4\n", []
+    for i, o in enumerate(objets, 1):
+        positions.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objets) + 1)
+    for p in positions:
+        out += b"%010d 00000 n \n" % p
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF" % (len(objets) + 1, xref)
+    Path(chemin).write_bytes(out)
+
+
+class TestLireTousLesFichiers(unittest.TestCase):
+    """Un client dépose un PDF et Jarvis ne le lit pas (01/11) : il doit lire TOUS les types de fichiers."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dossier = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _lire(self, nom):
+        from core.lecteur_fichier import lire_texte
+        return lire_texte(self.dossier / nom)
+
+    def test_texte_utf8_et_ancien_encodage(self):
+        (self.dossier / "a.txt").write_text("Rendez-vous à l'agence Allied, rue de l'Été", encoding="utf-8")
+        (self.dossier / "b.txt").write_bytes("Café crème à 2 € (Windows)".encode("cp1252"))
+        (self.dossier / "c.md").write_text("# Titre\nPhrase en *markdown*", encoding="utf-8")
+        self.assertIn("rue de l'Été", self._lire("a.txt"))
+        self.assertIn("Café crème", self._lire("b.txt"))
+        self.assertIn("Phrase en", self._lire("c.md"))
+
+    def test_csv_json_xml_code_et_extension_inconnue(self):
+        (self.dossier / "t.csv").write_text("nom;prix\nPomme;2\n", encoding="utf-8")
+        (self.dossier / "d.json").write_text('{"ville": "Lille"}', encoding="utf-8")
+        (self.dossier / "x.xml").write_text("<a><b>bonjour</b></a>", encoding="utf-8")
+        (self.dossier / "s.py").write_text("print('salut')", encoding="utf-8")
+        (self.dossier / "note.zzz").write_text("un fichier bizarre mais lisible", encoding="utf-8")
+        for nom, attendu in (("t.csv", "Pomme"), ("d.json", "Lille"), ("x.xml", "bonjour"),
+                             ("s.py", "salut"), ("note.zzz", "bizarre")):
+            self.assertIn(attendu, self._lire(nom), nom)
+
+    def test_word_avec_tableau(self):
+        from docx import Document
+        doc = Document()
+        doc.add_paragraph("Contrat de location")
+        t = doc.add_table(rows=1, cols=2)
+        t.rows[0].cells[0].text, t.rows[0].cells[1].text = "Loyer", "650 euros"
+        doc.save(str(self.dossier / "contrat.docx"))
+        texte = self._lire("contrat.docx")
+        self.assertIn("Contrat de location", texte)
+        self.assertIn("650 euros", texte)
+
+    def test_powerpoint_et_excel(self):
+        from pptx import Presentation
+        from openpyxl import Workbook
+        prs = Presentation()
+        diapo = prs.slides.add_slide(prs.slide_layouts[1])
+        diapo.shapes.title.text = "Bilan du trimestre"
+        prs.save(str(self.dossier / "p.pptx"))
+        wb = Workbook()
+        wb.active.append(["produit", "quantité"])
+        wb.active.append(["clous", 120])
+        wb.save(str(self.dossier / "e.xlsx"))
+        self.assertIn("Bilan du trimestre", self._lire("p.pptx"))
+        self.assertIn("clous | 120", self._lire("e.xlsx"))
+
+    def test_pdf_avec_texte(self):
+        _pdf_avec_texte(self.dossier / "agences.pdf", "Alliade Agences Lille")
+        self.assertIn("Alliade Agences Lille", self._lire("agences.pdf"))
+
+    def test_pdf_scanne_envoye_en_images(self):
+        # Un PDF qui n'est qu'une photo (scanné) : pas de texte, donc Jarvis envoie les pages en images.
+        from PIL import Image
+        from core.lecteur_fichier import construire_demande, lire_texte
+        Image.new("RGB", (400, 300), "white").save(self.dossier / "scan.pdf")
+        self.assertEqual(lire_texte(self.dossier / "scan.pdf"), "")
+        demande = construire_demande(self.dossier / "scan.pdf", "que dit ce document ?")
+        self.assertGreaterEqual(len(demande), 2)
+        self.assertIn("que dit ce document", demande[0])
+
+    def test_image_envoyee_a_gemini(self):
+        from PIL import Image
+        from core.lecteur_fichier import construire_demande
+        Image.new("RGB", (200, 100), "blue").save(self.dossier / "photo.png")
+        demande = construire_demande(self.dossier / "photo.png", "décris l'image")
+        self.assertEqual(len(demande), 2)
+
+    def test_la_question_est_transmise_avec_le_contenu(self):
+        from core.lecteur_fichier import repondre
+        _pdf_avec_texte(self.dossier / "agences.pdf", "Alliade Agences Lille")
+        recu = {}
+
+        def faux_gemini(contenu):
+            recu["contenu"] = contenu
+            return "L'agence est à Lille."
+
+        rep = repondre(self.dossier / "agences.pdf", "Où est l'agence ?", appeler=faux_gemini)
+        self.assertEqual(rep, "L'agence est à Lille.")
+        self.assertIn("Alliade Agences Lille", recu["contenu"][0])
+        self.assertIn("Où est l'agence ?", recu["contenu"][0])
+
+    def test_fichier_illisible_ou_absent_message_clair(self):
+        from core.lecteur_fichier import repondre
+        (self.dossier / "vide.pdf").write_bytes(b"")
+        (self.dossier / "binaire.bin").write_bytes(b"\x00\x01\x02" * 100)
+        self.assertIn("n'arrive pas à lire", repondre(self.dossier / "binaire.bin", "?", appeler=lambda c: "x"))
+        self.assertIn("ne trouve pas", repondre(self.dossier / "absent.txt", "?"))
+
+    def test_images_converties_en_donnees_jpeg_pour_gemini(self):
+        # Constaté avec le vrai Gemini : une image PIL brute est ignorée (« aucun fichier fourni »).
+        from PIL import Image
+        from core.lecteur_fichier import en_parts_gemini
+        sortie = en_parts_gemini(["question", Image.new("RGB", (50, 50), "red")])
+        self.assertEqual(sortie[0], "question")
+        blob = sortie[1].inline_data
+        self.assertEqual(blob.mime_type, "image/jpeg")
+        self.assertTrue(bytes(blob.data).startswith(b"\xff\xd8"))
+
+    def test_file_processor_passe_par_le_lecteur(self):
+        source = (RACINE / "actions" / "file_processor.py").read_text(encoding="utf-8")
+        self.assertIn("from core.lecteur_fichier import repondre", source)
+
+
 if __name__ == "__main__":
     unittest.main()
