@@ -802,6 +802,18 @@ def file_processor(parameters: dict, player=None, speak=None) -> str:
     if player:
         player.write_log(log_msg)
 
+    # Lire le fichier et répondre à la question (tous les formats lisibles, PDF scannés compris).
+    # Les actions précises (resize, convert, to_word, trim...) gardent leur ancien chemin.
+    _LIRE = ("", "read", "lire", "ask", "answer", "question", "summarize", "analyze", "describe",
+             "ocr", "custom", "translate_hint", "summary", "resume")
+    if action in _LIRE and file_type in ("pdf", "docx", "text", "csv", "excel", "json", "xml", "code",
+                                         "pptx", "image", "unknown"):
+        from core.lecteur_fichier import repondre
+        question = instruction or parameters.get("question", "")
+        if action == "ocr" and not question:
+            question = "Recopie tout le texte visible."
+        return repondre(path, question)
+
     if file_type == "unknown":
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")[:10000]
