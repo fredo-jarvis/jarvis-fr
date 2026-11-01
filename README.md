@@ -223,7 +223,7 @@ Tout se règle dans `memory\interface.json` (bloc-notes suffit), puis on relance
 | `casque` | `false` | `true` si tu portes un casque (permet de couper la parole à Jarvis) |
 | `cerveau` | `""` | Chemin du cerveau (vide = `Documents\Cerveau`) |
 | `musique_demarrage` | `true` | Joue la musique posée dans `assets\musique-demarrage\` à l'ouverture |
-| `actus` | `"locale"` | Les actualités du briefing de démarrage : `""` = France et monde, `"locale"` = celles de ta ville, ou un mot (`"Dunkerque"`, `"football"`…). Si rien n'est trouvé, il donne les actualités générales |
+| `actus` | `"locale"` | Les actualités du briefing de démarrage. **Par défaut : celles de ta ville** (celle que Jarvis a apprise). `"monde"` = France et monde, ou un mot de ton choix (`"Dunkerque"`, `"football"`…). Si rien n'est trouvé, il donne les actualités générales |
 
 Le nom de l'assistant, ton nom, sa voix et sa couleur se changent aussi depuis l'interface (**⚙ SETUP**).
 Raccourcis : **F3** envoie Jarvis sur l'écran suivant (ou dis « Jarvis, change d'écran »), **F2** passe en mode épuré, **F11** passe en fenêtre (que tu déplaces ensuite en l'attrapant à la souris n'importe où ; F11 de nouveau pour le plein écran), **F4** coupe le micro. Les touches ne marchent que si la fenêtre de Jarvis est active : clique d'abord dessus, ou utilise la commande vocale.
