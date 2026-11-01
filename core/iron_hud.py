@@ -795,7 +795,7 @@ def _badge(p, canvas, amp, parle):
                   int((base + k * 180) * 16), int(120 * 16))
     _texte(p, cx - r, cy - 12, 2 * r, 24, "J.A.R.V.I.S", 14, BLANC, align=Qt.AlignmentFlag.AlignHCenter)
     _texte(p, 280, 948, 300, 26, _etat(canvas), 17, CYAN_CLAIR, gras=False)
-    _texte(p, 280, 976, 300, 18, "MARK LV  ·  F2 ANCIEN ÉCRAN  ·  F11 FENÊTRE", 11, TEXTE_INFO,
+    _texte(p, 280, 976, 300, 18, "MARK LV · F3 ÉCRAN · F2 ÉPURÉ · F11 FENÊTRE", 11, TEXTE_INFO,
            nom="Consolas")
 
 
