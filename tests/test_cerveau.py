@@ -327,6 +327,26 @@ class TestActusDuBriefing(unittest.TestCase):
         self.assertEqual(requete_actus("locale", ""), GENERALE)          # ville pas encore connue
         self.assertEqual(requete_actus("Dunkerque", "Lille"), "actualités Dunkerque aujourd'hui")
 
+    def test_par_defaut_actus_locales_pour_tous_les_clients(self):
+        # Les clients déjà installés n'ont pas la clé "actus" dans leur interface.json : sans réglage,
+        # c'est la ville apprise (ou les actualités générales si Jarvis ne la connaît pas encore).
+        import json
+        import tempfile
+        import core.actus as actus
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "memory").mkdir()
+            ancienne_base, actus.BASE = actus.BASE, Path(tmp)
+            try:
+                (Path(tmp) / "memory" / "interface.json").write_text("{}", encoding="utf-8")
+                self.assertEqual(actus.requete_du_briefing(), actus.GENERALE)        # ville pas connue
+                (Path(tmp) / "memory" / "long_term.json").write_text(
+                    json.dumps({"identity": {"city": {"value": "Lille"}}}), encoding="utf-8")
+                self.assertEqual(actus.requete_du_briefing(), "actualités Lille aujourd'hui")
+                (Path(tmp) / "memory" / "interface.json").write_text('{"actus": "monde"}', encoding="utf-8")
+                self.assertEqual(actus.requete_du_briefing(), actus.GENERALE)        # le client choisit le monde
+            finally:
+                actus.BASE = ancienne_base
+
     def test_le_briefing_utilise_le_reglage_et_un_repli(self):
         source = (RACINE / "main.py").read_text(encoding="utf-8")
         self.assertIn("requete_du_briefing", source)

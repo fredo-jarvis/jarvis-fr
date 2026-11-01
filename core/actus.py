@@ -3,9 +3,10 @@ Les actualités du briefing de démarrage (demande de Fredo, 01/11 : « l'actu d
 pas, je préfère la locale »).
 
 Réglage "actus" de memory/interface.json :
-    ""  ou "monde"        les actualités de France et du monde (comportement d'origine)
-    "locale"              les actualités de TA ville (celle que Jarvis a apprise)
-    "Dunkerque"           ou n'importe quel mot : une région, un sujet, une équipe...
+    (absent)  ou "locale"  les actualités de TA ville (celle que Jarvis a apprise) : c'est le défaut,
+                           et si Jarvis ne connaît pas encore ta ville, ce sont les actualités générales
+    ""  ou "monde"         les actualités de France et du monde
+    "Dunkerque"            ou n'importe quel mot : une région, un sujet, une équipe...
 """
 import json
 from pathlib import Path
@@ -37,5 +38,5 @@ def requete_actus(reglage, ville: str = "") -> str:
 
 
 def requete_du_briefing() -> str:
-    reglage = _lire_json(BASE / "memory" / "interface.json").get("actus", "")
+    reglage = _lire_json(BASE / "memory" / "interface.json").get("actus", "locale")   # défaut : locale
     return requete_actus(reglage, ville_apprise())
