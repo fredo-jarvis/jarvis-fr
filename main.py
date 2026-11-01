@@ -1319,6 +1319,11 @@ class JarvisLive:
                 # hundred short strings, and a thread hop would cost more than
                 # the work itself.
                 result = search_memory(args.get("query", ""), limit=8)
+                # « le fichier que je t'ai envoyé » : le fichier déposé n'est pas dans la mémoire perso
+                from core.fichier_depose import indice_fichier
+                _indice = indice_fichier(args.get("query", ""), self.ui.current_file)
+                if _indice:
+                    result = _indice + "\n" + result
 
             elif name == "undo":
                 if str(args.get("action", "")).lower().strip() == "list":

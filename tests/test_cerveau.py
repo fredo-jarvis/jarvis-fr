@@ -154,5 +154,29 @@ class TestFenetreDeplacable(unittest.TestCase):
         self.assertIn("startSystemMove", source)
 
 
+class TestFichierDepose(unittest.TestCase):
+    """Bug d'un client (01/11) : « le fichier que je t'ai envoyé » -> « je n'ai pas de souvenir »."""
+
+    def test_questions_sur_un_fichier(self):
+        from core.fichier_depose import parle_d_un_fichier
+        for q in ("le fichier que je t'ai envoyé sur les agences", "Allied agences pdf", "mon document",
+                  "la pièce jointe", "le fichier déposé"):
+            self.assertTrue(parle_d_un_fichier(q), q)
+        for q in ("mon prénom", "la ville où j'habite", ""):
+            self.assertFalse(parle_d_un_fichier(q), q)
+
+    def test_indice_donne_seulement_si_un_fichier_est_depose(self):
+        from core.fichier_depose import indice_fichier
+        chemin = "C:/x/07-Alliade-Agences.pdf"
+        self.assertIn("file_processor", indice_fichier("le fichier envoyé", chemin))
+        self.assertIn("07-Alliade-Agences.pdf", indice_fichier("le fichier envoyé", chemin))
+        self.assertEqual(indice_fichier("le fichier envoyé", None), "")
+        self.assertEqual(indice_fichier("mon prénom", "C:/x/a.pdf"), "")
+
+    def test_main_et_prompt_utilisent_le_fichier_depose(self):
+        self.assertIn("indice_fichier", (RACINE / "main.py").read_text(encoding="utf-8"))
+        self.assertIn("[UPLOADED FILES]", (RACINE / "core" / "prompt.txt").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()
