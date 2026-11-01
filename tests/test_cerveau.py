@@ -100,10 +100,6 @@ class TestMeteoVille(unittest.TestCase):
         self.assertEqual(self.hud._lieu()["ville"], "Nice")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestChangerEcran(unittest.TestCase):
     """Bug de Jibis Lucius (01/11) : avec trois écrans, impossible de déplacer Jarvis."""
 
@@ -138,6 +134,24 @@ class TestChangerEcran(unittest.TestCase):
         source = (RACINE / "ui.py").read_text(encoding="utf-8")
         self.assertIn('QKeySequence("F3")', source)
         self.assertIn("ApplicationShortcut", source)
+
+
+class TestFenetreDeplacable(unittest.TestCase):
+    """Demande de Fredo (01/11) : pouvoir mettre Jarvis en fenêtre et le déplacer à la souris."""
+
+    def test_rectangle_de_la_fenetre(self):
+        try:
+            from ui import _rect_fenetre
+        except Exception as e:
+            self.skipTest(f"ui non importable : {e}")
+        self.assertEqual(_rect_fenetre(0, 0, 1920, 1080), (192, 108, 1536, 864))
+        x, y, w, h = _rect_fenetre(1920, 0, 2560, 1440)      # écran de droite
+        self.assertGreaterEqual(x, 1920)
+        self.assertEqual((w, h), (2048, 1152))
+
+    def test_on_peut_attraper_la_fenetre_a_la_souris(self):
+        source = (RACINE / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("startSystemMove", source)
 
 
 if __name__ == "__main__":
