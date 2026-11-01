@@ -337,5 +337,24 @@ class TestLireTousLesFichiers(unittest.TestCase):
         self.assertIn("from core.lecteur_fichier import repondre", source)
 
 
+class TestActusDuBriefing(unittest.TestCase):
+    """Demande de Fredo (01/11) : actualités locales au démarrage plutôt que celles du monde."""
+
+    def test_requete_selon_le_reglage(self):
+        from core.actus import GENERALE, requete_actus
+        self.assertEqual(requete_actus("", "Gravelines"), GENERALE)
+        self.assertEqual(requete_actus("monde", "Gravelines"), GENERALE)
+        self.assertEqual(requete_actus(None, ""), GENERALE)
+        self.assertEqual(requete_actus("locale", "Gravelines"), "actualités Gravelines aujourd'hui")
+        self.assertEqual(requete_actus("Locale", "Lille"), "actualités Lille aujourd'hui")
+        self.assertEqual(requete_actus("locale", ""), GENERALE)          # ville pas encore connue
+        self.assertEqual(requete_actus("Dunkerque", "Lille"), "actualités Dunkerque aujourd'hui")
+
+    def test_le_briefing_utilise_le_reglage_et_un_repli(self):
+        source = (RACINE / "main.py").read_text(encoding="utf-8")
+        self.assertIn("requete_du_briefing", source)
+        self.assertIn("actualités générales à la place", source)
+
+
 if __name__ == "__main__":
     unittest.main()
