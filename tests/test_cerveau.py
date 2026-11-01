@@ -174,7 +174,7 @@ class TestFichierDepose(unittest.TestCase):
         self.assertEqual(indice_fichier("mon prénom", "C:/x/a.pdf"), "")
 
     def test_main_et_prompt_utilisent_le_fichier_depose(self):
-        self.assertIn("indice_fichier", (RACINE / "main.py").read_text(encoding="utf-8"))
+        self.assertIn("fichiers_retenus", (RACINE / "main.py").read_text(encoding="utf-8"))
         self.assertIn("[UPLOADED FILES]", (RACINE / "core" / "prompt.txt").read_text(encoding="utf-8"))
 
 
@@ -312,6 +312,91 @@ class TestLireTousLesFichiers(unittest.TestCase):
     def test_file_processor_passe_par_le_lecteur(self):
         source = (RACINE / "actions" / "file_processor.py").read_text(encoding="utf-8")
         self.assertIn("from core.lecteur_fichier import repondre", source)
+
+
+class TestFichiersRetenus(unittest.TestCase):
+    """Question de Fredo (01/11) : à chaque séance il fallait redonner le fichier à Jarvis."""
+
+    def setUp(self):
+        import tempfile
+        import core.fichiers_retenus as fr
+        self.fr = fr
+        self.tmp = tempfile.TemporaryDirectory()
+        self.racine = Path(self.tmp.name)
+        self.ancienne_base, fr.BASE = fr.BASE, self.racine / "jarvis"
+
+    def tearDown(self):
+        self.fr.BASE = self.ancienne_base
+        self.tmp.cleanup()
+
+    def _fichier(self, nom, texte="contenu"):
+        p = self.racine / nom
+        p.write_text(texte, encoding="utf-8")
+        return p
+
+    def test_le_fichier_est_retrouve_a_la_seance_suivante(self):
+        p = self._fichier("07-Alliade-Agences.txt")
+        self.fr.retenir(p)
+        # Une « nouvelle séance » ne garde rien en mémoire vive : tout se relit sur le disque.
+        self.assertEqual(self.fr.retrouver("les agences Alliade"), str(p.resolve()))
+        self.assertIn("07-Alliade-Agences.txt", self.fr.bloc_pour_prompt())
+        self.assertIn("never ask", self.fr.bloc_pour_prompt())
+
+    def test_fichier_efface_ou_deplace_on_utilise_la_copie(self):
+        p = self._fichier("facture.txt", "Total 318 euros")
+        self.fr.retenir(p)
+        p.unlink()
+        trouve = self.fr.retrouver("la facture")
+        self.assertIsNotNone(trouve)
+        self.assertEqual(Path(trouve).read_text(encoding="utf-8"), "Total 318 euros")
+
+    def test_aucun_fichier_et_rien_qui_ressemble(self):
+        self.assertIsNone(self.fr.retrouver("facture", dernier_si_rien=True))
+        self.assertEqual(self.fr.bloc_pour_prompt(), "")
+        self.fr.retenir(self._fichier("facture.txt"))
+        self.assertIsNone(self.fr.retrouver("mon prénom"))
+        self.assertIsNotNone(self.fr.retrouver("quel est le total", dernier_si_rien=True))
+
+    def test_plus_recent_en_tete_et_limite(self):
+        ancien_max, self.fr.MAX_FICHIERS = self.fr.MAX_FICHIERS, 2
+        try:
+            for nom in ("a1a.txt", "b2b.txt", "c3c.txt"):
+                self.fr.retenir(self._fichier(nom))
+        finally:
+            self.fr.MAX_FICHIERS = ancien_max
+        self.assertEqual([e["nom"] for e in self.fr.liste()], ["c3c.txt", "b2b.txt"])
+        self.assertEqual(len(list((self.fr.BASE / "memory" / "fichiers").glob("*a1a.txt"))), 0)
+
+    def test_redonner_le_meme_fichier_ne_fait_pas_de_doublon(self):
+        p = self._fichier("note.txt")
+        self.fr.retenir(p)
+        self.fr.retenir(p)
+        self.assertEqual(len(self.fr.liste()), 1)
+
+    def test_indice_pour_recall_memory(self):
+        self.fr.retenir(self._fichier("07-Alliade-Agences.txt"))
+        self.assertIn("file_processor", self.fr.indice("Allied agences"))
+        self.assertIn("07-Alliade-Agences.txt", self.fr.indice("le fichier que je t'ai envoyé"))
+        self.assertEqual(self.fr.indice("mon prénom"), "")
+
+    def test_file_processor_retrouve_sans_que_le_fichier_soit_depose(self):
+        from actions import file_processor as fp
+        import core.lecteur_fichier as lf
+        self.fr.retenir(self._fichier("horaires.txt", "Ouvert de 9h à 18h"))
+        recu, reel = {}, lf.repondre
+
+        def faux(chemin, question="", appeler=None):
+            recu["chemin"], recu["question"] = str(chemin), question
+            return "ok"
+
+        lf.repondre = faux
+        try:
+            self.assertEqual(fp.file_processor({"file_path": "horaires.txt", "instruction": "à quelle heure ?"}), "ok")
+            self.assertTrue(recu["chemin"].endswith("horaires.txt"))
+            self.assertEqual(recu["question"], "à quelle heure ?")
+            self.assertEqual(fp.file_processor({"instruction": "à quelle heure ?"}), "ok")   # sans nom : le dernier
+        finally:
+            lf.repondre = reel
 
 
 class TestActusDuBriefing(unittest.TestCase):

@@ -783,8 +783,15 @@ def _process_pptx(path: Path, action: str, params: dict, speak=None) -> str:
 
 def file_processor(parameters: dict, player=None, speak=None) -> str:
     file_path_str = parameters.get("file_path", "").strip()
+    # Un fichier donné lors d'une séance précédente : Jarvis l'a gardé (core/fichiers_retenus.py).
+    from core import fichiers_retenus
+    if not file_path_str or not Path(file_path_str).exists():
+        _texte = file_path_str or f"{parameters.get('instruction', '')} {parameters.get('question', '')}"
+        _trouve = fichiers_retenus.retrouver(_texte, dernier_si_rien=not file_path_str)
+        if _trouve:
+            file_path_str = _trouve
     if not file_path_str:
-        return "No file path provided."
+        return "No file was given yet: ask the user to drop the file on the interface."
 
     path = Path(file_path_str)
     if not path.exists():
@@ -801,6 +808,7 @@ def file_processor(parameters: dict, player=None, speak=None) -> str:
     print(log_msg)
     if player:
         player.write_log(log_msg)
+    fichiers_retenus.retenir(path)
 
     # Lire le fichier et répondre à la question (tous les formats lisibles, PDF scannés compris).
     # Les actions précises (resize, convert, to_word, trim...) gardent leur ancien chemin.

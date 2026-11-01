@@ -57,6 +57,8 @@ Pour l'appeler : dis son nom (« Hey Jarvis ») ou maintiens Ctrl + Espace.
 ---------------------------------------------------------------------
  - Lire, résumer, traduire un PDF, Word, Excel ou PowerPoint déposé sur
    l'interface ; décrire une image.
+ - Il garde les fichiers donnés d'une séance à l'autre (30 derniers, sur ton PC,
+   dans memoryichiers) : plus besoin de les redonner.
  - Créer, copier, déplacer, renommer, ranger des fichiers et dossiers.
  - Ranger ou nettoyer le bureau, changer le fond d'écran.
  - Écrire, expliquer ou corriger du code ; construire un petit projet.

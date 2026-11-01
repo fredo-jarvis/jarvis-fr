@@ -1120,6 +1120,9 @@ class JarvisLive:
         })
 
         parts = [time_ctx, identity_ctx]
+        # Les fichiers donnés lors des séances précédentes : Jarvis sait qu'il les a encore.
+        from core.fichiers_retenus import bloc_pour_prompt as _bloc_fichiers
+        parts.append(_bloc_fichiers())
         # Édition française : la reconnaissance vocale doit partir du français, sinon elle
         # devine une autre langue et invente des mots (test du 30/10 : « Predo », « aviatore »).
         parts.append(
@@ -1320,8 +1323,8 @@ class JarvisLive:
                 # the work itself.
                 result = search_memory(args.get("query", ""), limit=8)
                 # « le fichier que je t'ai envoyé » : le fichier déposé n'est pas dans la mémoire perso
-                from core.fichier_depose import indice_fichier
-                _indice = indice_fichier(args.get("query", ""), self.ui.current_file)
+                from core.fichiers_retenus import indice as _indice_fichier
+                _indice = _indice_fichier(args.get("query", ""), self.ui.current_file)
                 if _indice:
                     result = _indice + "\n" + result
 
@@ -2136,7 +2139,7 @@ class JarvisLive:
                     p2 = (
                         f"[BRIEFING] Here are today's top news headlines:\n{news_text}\n\n"
                         "En francais : choisis UNE ou DEUX actualites marquantes, resume-les simplement "
-                        "en 2 phrases, dis que la liste complete est affichee a l'ecran, puis termine par "
+                        "en 2 phrases, puis termine par "
                         "une question chaleureuse du genre : 'Qu'est-ce qu'on fait aujourd'hui, Monsieur ?'. "
                         "N'appelle aucun outil."
                     )

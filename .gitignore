@@ -55,5 +55,6 @@ screenshots/
 _sauvegarde_claude/           # copies de sécurité faites par Jarvis Claude
 enregistrements/
 memory/carnet-cerveau.md      # notes personnelles pour le cerveau de l'utilisateur
+memory/fichiers/              # copies des fichiers donnés à Jarvis (privé)
 memory/*.json                 # réglages et mémoire personnels
 !memory/interface.json         # réglages par défaut fournis (écran, ville, cerveau)
