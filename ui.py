@@ -519,6 +519,12 @@ def _ecran_suivant(ecrans, actuel):
     return ecrans[(i + 1) % len(ecrans)]
 
 
+def _rect_fenetre(x, y, w, h):
+    """Rectangle d'une fenêtre de Jarvis (80 % de l'écran, centrée) quand on sort du plein écran."""
+    lw, lh = int(w * 0.8), int(h * 0.8)
+    return x + (w - lw) // 2, y + (h - lh) // 2, lw, lh
+
+
 def _load_holo() -> bool:
     """Écran HUD en vrai hologramme : fenêtre transparente (demande de l'utilisateur, 2026-10-26)."""
     try:
@@ -979,6 +985,13 @@ class HudCanvas(QWidget):
                     return
             except Exception as ex:
                 print(f"[Iron HUD] clic : {ex}")
+        # En fenêtre (F11), on attrape Jarvis n'importe où pour le déplacer à la souris :
+        # la fenêtre n'a pas de barre de titre (demande de Fredo, 01/11).
+        if e.button() == Qt.MouseButton.LeftButton and not self.window().isFullScreen():
+            h = self.window().windowHandle()
+            if h is not None:
+                h.startSystemMove()
+                return
         super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
@@ -4074,9 +4087,15 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(250, self.showFullScreen)
         return True
 
+    def _en_fenetre(self):
+        """Sort du plein écran : vraie fenêtre (80 % de l'écran), déplaçable à la souris."""
+        self.showNormal()
+        g = self.screen().availableGeometry()
+        self.setGeometry(*_rect_fenetre(g.x(), g.y(), g.width(), g.height()))
+
     def _toggle_fullscreen(self):
         if self.isFullScreen():
-            self.showNormal()
+            self._en_fenetre()
         else:
             self.showFullScreen()
 
@@ -4101,7 +4120,7 @@ class MainWindow(QMainWindow):
         if on:
             self.showFullScreen()
         elif self.isFullScreen():
-            self.showNormal()
+            self._en_fenetre()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
