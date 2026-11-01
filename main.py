@@ -2033,7 +2033,20 @@ class JarvisLive:
 
         # Start fetching news immediately — runs in parallel while phase 1 plays
         loop = asyncio.get_event_loop()
-        news_future = loop.run_in_executor(None, _fetch_news_sync, "actualités France monde aujourd'hui")
+        from core.actus import GENERALE as _ACTUS_GENERALE, requete_du_briefing
+
+        def _actus_du_briefing() -> str:
+            # Réglage "actus" (ex. « locale ») ; si la recherche locale ne trouve rien, on retombe
+            # sur les actualités générales plutôt que de n'en donner aucune.
+            requete = requete_du_briefing()
+            texte = _fetch_news_sync(requete)
+            if requete != _ACTUS_GENERALE and (not texte or texte.startswith(
+                    ("No news found", "Search failed", "Please provide"))):
+                print(f"[Briefing] rien trouvé pour « {requete} » : actualités générales à la place")
+                texte = _fetch_news_sync(_ACTUS_GENERALE)
+            return texte
+
+        news_future = loop.run_in_executor(None, _actus_du_briefing)
 
         await asyncio.sleep(0.3)
         if not self.session:
