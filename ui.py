@@ -506,6 +506,19 @@ def _ecran_choisi(app):
     return None
 
 
+def _ecran_suivant(ecrans, actuel):
+    """L'écran d'après dans la liste (on fait le tour), ou None s'il n'y en a qu'un seul
+    (bug de Jibis Lucius, 01/11 : avec trois écrans, rien ne permettait de déplacer Jarvis)."""
+    ecrans = list(ecrans)
+    if len(ecrans) < 2:
+        return None
+    try:
+        i = ecrans.index(actuel)
+    except ValueError:
+        i = -1
+    return ecrans[(i + 1) % len(ecrans)]
+
+
 def _load_holo() -> bool:
     """Écran HUD en vrai hologramme : fenêtre transparente (demande de l'utilisateur, 2026-10-26)."""
     try:
@@ -3120,6 +3133,7 @@ class MainWindow(QMainWindow):
     _state_sig      = pyqtSignal(str)
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
+    _ecran_sig      = pyqtSignal()           # « écran suivant » (touche F3 ou commande vocale)
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
     _cam_stream_sig = pyqtSignal(bool)       # True=start live stream, False=stop
     _cam_frame_sig  = pyqtSignal(bytes)      # live camera frame → HUD area
@@ -3416,6 +3430,7 @@ class MainWindow(QMainWindow):
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
         self._reconfig_sig.connect(self._show_setup)
+        self._ecran_sig.connect(self._changer_ecran)
         self._camera_sig.connect(self._show_camera_frame)
         self._confirm_sig.connect(self._show_confirm_banner)
         self._confirm_hide_sig.connect(self._hide_confirm_banner)
@@ -3455,6 +3470,10 @@ class MainWindow(QMainWindow):
         # Mode épuré « HUD » (demande de l'utilisateur, 2026-10-24) : F2 bascule.
         sc_min = QShortcut(QKeySequence("F2"), self)
         sc_min.activated.connect(self._toggle_minimal)
+        sc_ecran = QShortcut(QKeySequence("F3"), self)
+        sc_ecran.activated.connect(self._changer_ecran)
+        for _sc in (sc_mute, sc_full, sc_intr, sc_min, sc_ecran):
+            _sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self._apply_minimal(_load_minimal())
 
     def _show_camera_frame(self, img_bytes: bytes):
@@ -4037,6 +4056,23 @@ class MainWindow(QMainWindow):
             self._log.append_log("SYS: Desktop shortcut created.")
         except Exception as e:
             self._log.append_log(f"ERR: Shortcut failed — {e}")
+
+    def _changer_ecran(self) -> bool:
+        """Envoie Jarvis sur l'écran suivant (on fait le tour). Garde le plein écran."""
+        cible = _ecran_suivant(QApplication.instance().screens(), self.screen())
+        if cible is None:
+            return False
+        plein = self.isFullScreen()
+        if plein:
+            self.showNormal()
+        g = cible.availableGeometry()
+        self.move(g.x() + 40, g.y() + 40)
+        h = self.windowHandle()
+        if h is not None:
+            h.setScreen(cible)
+        if plein:
+            QTimer.singleShot(250, self.showFullScreen)
+        return True
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
@@ -6002,6 +6038,13 @@ class JarvisUI:
 
     def set_state(self, state: str):
         self._win._state_sig.emit(state)
+
+    def changer_ecran(self) -> bool:
+        """Utilisable depuis n'importe quel thread (commande vocale). Faux s'il n'y a qu'un écran."""
+        if len(self._app.screens()) < 2:
+            return False
+        self._win._ecran_sig.emit()
+        return True
 
     def write_log(self, text: str):
         self._win._log_sig.emit(text)

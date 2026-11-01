@@ -125,3 +125,43 @@ class TestMeteoVille(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestChangerEcran(unittest.TestCase):
+    """Bug de Jibis Lucius (01/11) : avec trois écrans, impossible de déplacer Jarvis."""
+
+    def test_ecran_suivant_fait_le_tour(self):
+        try:
+            from ui import _ecran_suivant
+        except Exception as e:
+            self.skipTest(f"ui non importable : {e}")
+        self.assertEqual(_ecran_suivant(["A", "B", "C"], "A"), "B")
+        self.assertEqual(_ecran_suivant(["A", "B", "C"], "B"), "C")
+        self.assertEqual(_ecran_suivant(["A", "B", "C"], "C"), "A")      # on refait le tour
+        self.assertEqual(_ecran_suivant(["A", "B"], "inconnu"), "A")
+        self.assertIsNone(_ecran_suivant(["A"], "A"))                    # un seul écran : rien à faire
+        self.assertIsNone(_ecran_suivant([], None))
+
+    def test_plugin_repond_selon_le_nombre_d_ecrans(self):
+        from plugins.changer_ecran import run
+
+        class Un:
+            def changer_ecran(self):
+                return False
+
+        class Trois:
+            def changer_ecran(self):
+                return True
+
+        self.assertIn("seul écran", run({}, Un()))
+        self.assertIn("écran suivant", run({}, Trois()))
+        self.assertIn("pas", run({}, None))
+
+    def test_raccourcis_valables_meme_sans_le_focus(self):
+        source = (RACINE / "ui.py").read_text(encoding="utf-8")
+        self.assertIn('QKeySequence("F3")', source)
+        self.assertIn("ApplicationShortcut", source)
+
+
+if __name__ == "__main__":
+    unittest.main()

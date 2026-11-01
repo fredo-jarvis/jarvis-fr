@@ -225,7 +225,7 @@ Tout se règle dans `memory\interface.json` (bloc-notes suffit), puis on relance
 | `musique_demarrage` | `true` | Joue la musique posée dans `assets\musique-demarrage\` à l'ouverture |
 
 Le nom de l'assistant, ton nom, sa voix et sa couleur se changent aussi depuis l'interface (**⚙ SETUP**).
-Raccourcis : **F2** change d'écran, **F11** passe en fenêtre, **F4** coupe le micro.
+Raccourcis : **F3** envoie Jarvis sur l'écran suivant (ou dis « Jarvis, change d'écran »), **F2** passe en mode épuré, **F11** passe en fenêtre, **F4** coupe le micro. Les touches ne marchent que si la fenêtre de Jarvis est active : clique d'abord dessus, ou utilise la commande vocale.
 
 ---
 
