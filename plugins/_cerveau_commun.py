@@ -8,6 +8,18 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+def _documents() -> Path:
+    """Le vrai dossier Documents de Windows, le même que l'installateur (souvent dans OneDrive)."""
+    try:
+        import ctypes
+        tampon = ctypes.create_unicode_buffer(1024)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, tampon) == 0 and tampon.value:
+            return Path(tampon.value)
+    except Exception:
+        pass
+    return Path.home() / "Documents"
+
+
 def _chemin_cerveau() -> Path:
     """Dossier du cerveau : réglage "cerveau" de memory/interface.json, sinon Documents\\Cerveau."""
     try:
@@ -17,7 +29,7 @@ def _chemin_cerveau() -> Path:
             return Path(r["cerveau"]).expanduser()
     except Exception:
         pass
-    return Path.home() / "Documents" / "Cerveau"
+    return _documents() / "Cerveau"
 
 
 CERVEAU = _chemin_cerveau()
