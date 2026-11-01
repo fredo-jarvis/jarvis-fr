@@ -237,6 +237,8 @@ Tout se règle dans `memory\interface.json` (bloc-notes suffit), puis on relance
 Le nom de l'assistant, ton nom, sa voix et sa couleur se changent aussi depuis l'interface (**⚙ SETUP**).
 Raccourcis : **F3** envoie Jarvis sur l'écran suivant (ou dis « Jarvis, change d'écran »), **F2** passe en mode épuré, **F11** passe en fenêtre (que tu déplaces ensuite en l'attrapant à la souris n'importe où ; F11 de nouveau pour le plein écran), **F4** coupe le micro. Les touches ne marchent que si la fenêtre de Jarvis est active : clique d'abord dessus, ou utilise la commande vocale.
 
+📄 **Toutes les commandes que Jarvis sait faire** sont dans le fichier [`COMMANDES.txt`](COMMANDES.txt).
+
 ---
 
 ## 📦 Autre façon : télécharger le ZIP

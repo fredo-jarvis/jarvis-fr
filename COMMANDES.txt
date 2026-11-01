@@ -1,0 +1,93 @@
+=====================================================================
+  JARVIS : TOUT CE QU'IL SAIT FAIRE (et comment le lui demander)
+=====================================================================
+Parle-lui naturellement, en français : pas besoin de phrase exacte.
+Les exemples ci-dessous montrent l'idée, tu peux les dire à ta façon.
+Pour l'appeler : dis son nom (« Hey Jarvis ») ou maintiens Ctrl + Espace.
+
+---------------------------------------------------------------------
+ TOUCHES DU CLAVIER (la fenêtre de Jarvis doit être active)
+---------------------------------------------------------------------
+ F2  : passe de l'écran épuré (grand cercle bleu) à l'interface complète
+ F3  : envoie Jarvis sur l'écran suivant (si tu as plusieurs écrans)
+ F4  : coupe / remet le micro
+ F11 : fenêtre déplaçable à la souris  <->  plein écran
+ Échap : coupe la parole de Jarvis
+
+---------------------------------------------------------------------
+ CONVERSATION ET MÉMOIRE
+---------------------------------------------------------------------
+ - Il se souvient de toi (prénom, ville, goûts, projets) sans que tu aies
+   à lui dire « retiens ça » : « J'habite à Lille » suffit.
+ - « Qu'est-ce que tu sais sur moi ? »
+ - « Active le mode humour » / « Redeviens sérieux »
+ - « Au revoir Jarvis », « Ferme-toi », « Bonne nuit » : il s'éteint.
+
+---------------------------------------------------------------------
+ LE SECOND CERVEAU (ton wiki Obsidian)
+---------------------------------------------------------------------
+ - « Où en est mon projet ? » / « Qu'est-ce qu'on avait décidé pour... ? »
+ - « Lis-moi la page à faire »
+ - « Note ça dans le cerveau : ... » / « Dis à Claude que... »
+ - « Jarvis, montre-moi le cerveau en hologramme »  (ou « ferme l'hologramme »)
+   Avec une webcam : pincer pour ouvrir, écarter les deux mains pour zoomer,
+   signe de paix pour tout remettre à zéro. Sans webcam : souris.
+
+---------------------------------------------------------------------
+ L'ORDINATEUR
+---------------------------------------------------------------------
+ - « Ouvre Chrome / mon dossier Téléchargements / le fichier facture »
+ - « Ferme Spotify »
+ - « Monte / baisse le volume », « Mets la luminosité à 50 »
+ - « Quelle est la charge du processeur ? » (mémoire, carte graphique,
+   températures aussi)
+ - « Annule ce que tu viens de faire » (fichier déplacé, renommé, réglage)
+ - Éteindre, redémarrer, couper le Wi-Fi : il attend que TU cliques sur un
+   bouton de confirmation.
+ - « Change d'écran » / « Passe sur l'écran suivant » (plusieurs écrans)
+ - « Mets un rappel à 15 heures : appeler le dentiste »
+ - « Enregistre mon écran » (pause, reprise, arrêt)
+ - « Montre-moi où cliquer pour ... » : il fait une capture et entoure le bouton
+ - « Qu'est-ce que tu vois sur mon écran ? » / « Regarde avec la caméra »
+ - « Ferme la caméra »
+ - Dictée : « Crée un fichier texte et écris ce que je te dicte »
+
+---------------------------------------------------------------------
+ FICHIERS ET PROJETS
+---------------------------------------------------------------------
+ - Lire, résumer, traduire un PDF, Word, Excel ou PowerPoint déposé sur
+   l'interface ; décrire une image.
+ - Créer, copier, déplacer, renommer, ranger des fichiers et dossiers.
+ - Ranger ou nettoyer le bureau, changer le fond d'écran.
+ - Écrire, expliquer ou corriger du code ; construire un petit projet.
+
+---------------------------------------------------------------------
+ INTERNET ET MÉDIAS
+---------------------------------------------------------------------
+ - « Cherche... » / « Quelles sont les actus sur... ? » / « Compare... »
+   (avec les sources)
+ - « Quel temps fait-il demain ? » (météo de ta ville)
+ - « Mets la bande-annonce de... » : la vidéo s'affiche dans l'interface
+ - « Pause », « vidéo suivante », « avance de 10 secondes », « sous-titres »,
+   « passe la pub » (YouTube)
+ - « Cherche sur YouTube... », « Résume cette vidéo »
+ - « Ouvre Amazon et cherche... » (il pilote ton navigateur Edge)
+ - « J'ai des nouveaux mails ? » / « Lis le premier » (Gmail, lecture seule)
+ - « Surveille l'actualité sur... » (alerte quand il y a du nouveau)
+ - Vols, messages WhatsApp ou Telegram, jeux Steam / Epic : possibles si
+   ces fonctions sont réglées sur ton PC.
+
+---------------------------------------------------------------------
+ PILOTER JARVIS DEPUIS TON TÉLÉPHONE
+---------------------------------------------------------------------
+ La télécommande se branche avec un QR code (voir l'interface complète).
+
+---------------------------------------------------------------------
+ BON À SAVOIR
+---------------------------------------------------------------------
+ - Ce fichier peut ne pas être complet : Jarvis apprend de nouvelles
+   compétences au fil des versions. En cas de doute, demande-lui
+   simplement : « Est-ce que tu sais faire ça ? »
+ - Tous les réglages sont dans  memory\interface.json  (ville, écran,
+   mode calme, casque...).
+=====================================================================
