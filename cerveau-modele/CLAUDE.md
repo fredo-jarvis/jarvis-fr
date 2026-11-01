@@ -6,8 +6,10 @@
 
 > **Le Jarvis vocal** (Mark LV, version française) lit ce cerveau : il lit `wiki/fiche-cerveau.md`
 > à chaque démarrage, il cherche et lit les pages quand on lui pose une question, et il écrit
-> ses notes dans un carnet (`memory/carnet-cerveau.md`, dans le dossier de Jarvis). Il n'écrit
-> jamais dans le wiki lui-même : c'est toi qui ranges ses notes.
+> ses notes dans un carnet (`memory/carnet-cerveau.md`, dans le dossier de Jarvis). Il tient
+> aussi lui-même deux choses : la page `wiki/entites/moi.md` (ce qu'il sait de l'utilisateur,
+> réécrite à chaque nouveau fait) et une ligne `session` dans `wiki/log.md` à chaque fin de
+> séance. Le reste du wiki, c'est toi qui le ranges à partir du carnet.
 
 ---
 

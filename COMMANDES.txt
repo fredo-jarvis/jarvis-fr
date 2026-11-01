@@ -29,8 +29,9 @@ Pour l'appeler : dis son nom (« Hey Jarvis ») ou maintiens Ctrl + Espace.
  - « Où en est mon projet ? » / « Qu'est-ce qu'on avait décidé pour... ? »
  - « Lis-moi la page à faire »
  - « Note ça dans le cerveau : ... » / « Dis à Claude que... »
- - Bientôt, dans la version 1.1 : le cerveau en hologramme, que l'on manipule
-   avec les mains devant la webcam (pas encore dans cette version).
+ - « Jarvis, montre-moi le cerveau en hologramme »  (ou « ferme l'hologramme »)
+   Avec une webcam : pincer pour ouvrir, écarter les deux mains pour zoomer,
+   signe de paix pour tout remettre à zéro. Sans webcam : souris.
 
 ---------------------------------------------------------------------
  L'ORDINATEUR

@@ -47,6 +47,29 @@ class TestNavigateur(unittest.TestCase):
 
 
 class TestBugsDejaCorriges(unittest.TestCase):
+    """Un test par bug signalé : il ne doit plus jamais revenir."""
+
+    def test_prenom_vide_ou_unknown_pas_enregistre(self):
+        # Bug du 31/10 : la personne passe la question, « unknown » était enregistré comme prénom.
+        from plugins._cerveau_commun import valeur_vide
+        for v in ("", "  ", "unknown", "Unknown", "inconnu", "N/A", None):
+            self.assertTrue(valeur_vide(v), f"{v!r} devrait être ignoré")
+        self.assertFalse(valeur_vide("Frédéric"))
+
+    def test_prenom_first_name_apparait_dans_la_page_moi(self):
+        # Bug du 30/10 : Gemini range le prénom sous « first_name » au lieu de « name ».
+        import tempfile
+        import plugins._cerveau_commun as cc
+        with tempfile.TemporaryDirectory() as tmp:
+            ancien = cc.WIKI
+            cc.WIKI = Path(tmp)
+            try:
+                cc.page_moi({"identity": {"first_name": {"value": "Cyril"}}})
+                texte = (Path(tmp) / "entites" / "moi.md").read_text(encoding="utf-8")
+            finally:
+                cc.WIKI = ancien
+        self.assertIn("**Prénom** : Cyril", texte)
+
     def test_compteur_processeur_demarre_mesure(self):
         # Bug du 31/10 : le compteur CPU affichait 0 % car la 1re mesure de psutil n'était pas amorcée.
         source = (RACINE / "core" / "iron_hud.py").read_text(encoding="utf-8")
@@ -397,6 +420,42 @@ class TestFichiersRetenus(unittest.TestCase):
             self.assertEqual(fp.file_processor({"instruction": "à quelle heure ?"}), "ok")   # sans nom : le dernier
         finally:
             lf.repondre = reel
+
+
+class TestHologrammeSOuvre(unittest.TestCase):
+    """Des clients (01/11) : « le cerveau en hologramme ne s'ouvre pas »."""
+
+    def test_serveur_lent_on_attend_assez_longtemps(self):
+        # PC lent ou antivirus : le serveur peut mettre plus de 5 secondes à démarrer.
+        import plugins.cerveau_hologramme as h
+        essais = {"n": 0}
+
+        def actif():
+            essais["n"] += 1
+            return essais["n"] > 60          # répond après 60 essais de 0,2 s (12 secondes)
+
+        anciens = h._serveur_actif, h.subprocess.Popen, h.time.sleep
+        h._serveur_actif, h.subprocess.Popen, h.time.sleep = actif, lambda *a, **k: None, lambda s: None
+        try:
+            self.assertTrue(h._demarrer_serveur())
+        finally:
+            h._serveur_actif, h.subprocess.Popen, h.time.sleep = anciens
+
+    def test_navigateur_en_panne_on_ouvre_le_navigateur_par_defaut(self):
+        import plugins.cerveau_hologramme as h
+        ouvert = []
+
+        def panne(*a, **k):
+            raise OSError("navigateur introuvable")
+
+        anciens = h._demarrer_serveur, h._navigateur, h.subprocess.Popen, h.webbrowser.open
+        h._demarrer_serveur, h._navigateur = (lambda: True), (lambda: "C:/chrome.exe")
+        h.subprocess.Popen, h.webbrowser.open = panne, ouvert.append
+        try:
+            self.assertIn("opened", h.run({"action": "open"}))
+        finally:
+            h._demarrer_serveur, h._navigateur, h.subprocess.Popen, h.webbrowser.open = anciens
+        self.assertEqual(ouvert, [h.ADRESSE])
 
 
 class TestCerveauDansOneDrive(unittest.TestCase):
