@@ -71,6 +71,8 @@ L'installation te la demandera à la fin : il suffira de la coller. Elle reste *
 
 ## ⚡ Installation en une ligne
 
+> **Le plus simple :** télécharge [**Jarvis-FR-Setup-1.1.0.exe**](https://github.com/fredo-jarvis/jarvis-fr/releases/latest) et double-clique dessus. Il fait toute l'installation ci-dessous en une fois, avec une case pour ajouter le cerveau local (Ollama). Si Windows affiche « Windows a protégé votre ordinateur » : « Informations complémentaires » puis « Exécuter quand même ».
+
 1. Ouvre le menu Démarrer, tape **PowerShell**, puis ouvre-le.
 2. Colle cette ligne et appuie sur **Entrée** :
 
