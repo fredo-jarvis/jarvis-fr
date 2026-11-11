@@ -227,6 +227,17 @@ Le cerveau est un **wiki personnel** : un dossier de pages Markdown (`Documents\
 - **Jarvis** (la voix) lit la *fiche du cerveau* à chaque démarrage, cherche et lit les pages quand tu lui poses une question, et écrit ses notes dans un **carnet**. Il tient aussi lui-même ta page **« Moi »** (`wiki/entites/moi.md` : prénom, ville, goûts, projets) et une ligne dans le **journal** à chaque fin de séance : ton cerveau se remplit même sans Claude Code.
 - **Claude Code** (l'écrit) range les notes du carnet, écrit et relie les pages, et tient la fiche à jour.
 
+### Qui fait quoi dans le cerveau ?
+
+| Jarvis le fait **tout seul** (rien à installer) | Il faut **Claude Code** (abonnement Claude payant) |
+|---|---|
+| Noter dans son carnet ce qu'il apprend en parlant avec toi | **Ranger** les notes du carnet dans les bonnes pages |
+| Tenir ta page « Moi » (prénom, ville, goûts, projets) | **Créer** les pages et les **relier** entre elles |
+| Ajouter une ligne au journal à chaque fin de séance | **Tenir à jour la fiche** que Jarvis lit au démarrage |
+| Lire le cerveau pour répondre à tes questions | **Ajouter un document** (PDF, article…) au cerveau |
+
+> **Sans Claude Code**, Jarvis marche et son cerveau se remplit un peu, mais les notes s'accumulent dans le carnet sans être rangées. **Avec Claude Code**, ouvre-le dans `Documents\Cerveau` de temps en temps et dis-lui : *« Range le carnet de Jarvis et mets la fiche à jour. »* Il sait quoi faire grâce au fichier `CLAUDE.md` du cerveau.
+
 ### Installer le cerveau, étape par étape
 
 1. **Le dossier est déjà là** : `Documents\Cerveau`, avec ses règles (`CLAUDE.md`) et un wiki vide (`wiki/index.md`, `wiki/log.md`, `wiki/fiche-cerveau.md`).

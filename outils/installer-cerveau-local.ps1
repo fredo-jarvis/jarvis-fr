@@ -17,7 +17,7 @@ if (-not (Test-Path $ollama)) {
 Etape "Démarrage du moteur Ollama"
 function OllamaRepond { try { Invoke-WebRequest "http://127.0.0.1:11434/" -UseBasicParsing -TimeoutSec 2 | Out-Null; return $true } catch { return $false } }
 if (-not (OllamaRepond)) {
-    Start-Process $ollama -ArgumentList "serve" -WindowStyle Hidden
+    Start-Process $ollama -ArgumentList "serve" -WorkingDirectory (Split-Path $ollama) -WindowStyle Hidden   # pas depuis le dossier de Jarvis : sinon il le bloque à la désinstallation
     for ($i = 0; $i -lt 30 -and -not (OllamaRepond); $i++) { Start-Sleep 1 }
     if (-not (OllamaRepond)) { throw "Ollama ne démarre pas. Ouvre l'application Ollama puis relance." }
 }
