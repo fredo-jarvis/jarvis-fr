@@ -53,8 +53,68 @@ Type: filesandordirs; Name: "{app}\uploads"
 [UninstallRun]
 ; (le raccourci du bureau est retiré ci-dessous ; la clé, la mémoire et le cerveau de la personne ne sont jamais supprimés)
 [Code]
+// Le désinstallateur d'Inno ne sait pas effacer un fichier dont le chemin complet dépasse 260 caractères
+// (journal : « Failed to delete the file; it may be in use (3) » puis « Failed to delete directory (145) »).
+// Le .venv contient de tels fichiers (PyQt6, google-genai) dès que le dossier d'installation est un peu profond.
+// On l'efface donc avant, avec rd et le préfixe \\?\ qui lève cette limite. Seul {app}\.venv est visé.
+procedure SupprimerVenv;
+var
+  Venv: String;
+  Code: Integer;
+begin
+  Venv := ExpandConstant('{app}\.venv');
+  if (Length(ExpandConstant('{app}')) > 3) and DirExists(Venv) then
+  begin
+    Log('Suppression du .venv (chemins longs) : ' + Venv);
+    if Exec(ExpandConstant('{cmd}'), '/c rd /s /q "\\?\' + Venv + '"', '', SW_HIDE, ewWaitUntilTerminated, Code) then
+      Log('rd terminé, code ' + IntToStr(Code))
+    else
+      Log('rd n''a pas pu être lancé');
+    if DirExists(Venv) then
+      Log('Le .venv est encore là après rd');
+  end;
+end;
+
+// Efface un raccourci du bureau seulement s'il lance le Jarvis de CE dossier ({app}\Lancer-Jarvis.bat).
+// Un raccourci qui pointe vers un autre Jarvis (autre installation) n'est jamais touché.
+procedure SupprimerRaccourci(Nom: String);
+var
+  Chemin, Cible, Attendu: String;
+  Shell, Lien: Variant;
+begin
+  if Nom = '' then exit;
+  Chemin := ExpandConstant('{userdesktop}\') + Nom + '.lnk';
+  if not FileExists(Chemin) then exit;
+  Attendu := ExpandConstant('{app}\Lancer-Jarvis.bat');
+  Cible := '';
+  try
+    Shell := CreateOleObject('WScript.Shell');
+    Lien := Shell.CreateShortcut(Chemin);
+    Cible := Lien.TargetPath;
+  except
+    Log('Raccourci illisible, on n''y touche pas : ' + Chemin);
+    exit;
+  end;
+  if CompareText(Cible, Attendu) = 0 then
+  begin
+    if DeleteFile(Chemin) then
+      Log('Raccourci supprimé : ' + Chemin)
+    else
+      Log('Raccourci non supprimé (erreur) : ' + Chemin);
+  end
+  else
+    Log('Raccourci gardé, il pointe ailleurs : ' + Chemin + ' -> ' + Cible);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
+  if CurUninstallStep = usUninstall then
+    SupprimerVenv;
   if CurUninstallStep = usPostUninstall then
-    DeleteFile(ExpandConstant('{userdesktop}\Jarvis.lnk'));
+  begin
+    SupprimerVenv;  // seconde chance si un fichier était encore ouvert au premier passage
+    SupprimerRaccourci('Jarvis');
+    if CompareText(GetEnv('JARVIS_RACCOURCI'), 'Jarvis') <> 0 then
+      SupprimerRaccourci(GetEnv('JARVIS_RACCOURCI'));
+  end;
 end;
