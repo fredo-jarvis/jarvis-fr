@@ -155,6 +155,7 @@ def _ddg_news(query: str, max_results: int = 8) -> list[dict]:
                     "snippet": r.get("body",   ""),
                     "url":     r.get("url",    ""),
                     "source":  r.get("source", ""),
+                    "date":    r.get("date",   ""),
                 })
     except Exception as e:
         print(f"[WebSearch] ⚠️ DDG news() failed ({e}) — falling back to text search")
@@ -176,6 +177,88 @@ def _format_ddg(query: str, results: list[dict]) -> str:
         if r.get("url"):     lines.append(f"   Source: {r['url']}")
         lines.append("")
     return "\n".join(lines).strip()
+
+
+def _maintenant():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc)
+
+
+def _garder_recentes(results: list[dict], jours: int = 7, maintenant=None) -> list[dict]:
+    """Ne garde que les articles datés des `jours` derniers jours (bug du 2026-11-11 : le briefing répétait
+    pendant des semaines les mêmes vieux articles). Un article sans date est écarté."""
+    from datetime import datetime, timedelta, timezone
+    maintenant = maintenant or _maintenant()
+    garde = []
+    for r in results:
+        brut = str(r.get("date") or "").strip()
+        if not brut:
+            continue
+        try:
+            d = datetime.fromisoformat(brut.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        if maintenant - d <= timedelta(days=jours):
+            garde.append(r)
+    return garde
+
+
+# Fils officiels gratuits, sans clé ni quota (ajout du 2026-11-11 : Gemini sans quota et DDG qui renvoyait de
+# vieux articles ou des articles étrangers, le briefing n'avait plus d'actualités du jour).
+FIL_NATIONAL = "https://www.francetvinfo.fr/titres.rss"
+FIL_LOCAL = "https://france3-regions.francetvinfo.fr/hauts-de-france/rss"
+# Fil régional : vide par défaut. Pour l'activer, mets dans MOTS_LOCAUX des mots de ta région (ex. "lille", "/nord/")
+# et dans FIL_LOCAL le fil RSS de ta région sur france3-regions.francetvinfo.fr. Sinon, les nouvelles de ta ville
+# viennent de la recherche DuckDuckGo, toujours filtrées sur les 7 derniers jours.
+MOTS_LOCAUX: tuple = ()
+
+
+def _telecharger(url: str) -> bytes:
+    import urllib.request
+    q = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Jarvis"})
+    with urllib.request.urlopen(q, timeout=8) as r:
+        return r.read()
+
+
+def _rss_news(url: str, max_results: int = 8) -> list[dict]:
+    """Articles d'un fil RSS, avec leur date (format ISO) pour le filtre des nouvelles récentes."""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+    try:
+        racine = ET.fromstring(_telecharger(url))
+    except Exception as e:
+        print(f"[WebSearch] ⚠️ fil RSS illisible ({url}) : {e}")
+        return []
+    res = []
+    for it in racine.findall(".//item")[:max_results * 2]:
+        try:
+            date = parsedate_to_datetime(it.findtext("pubDate") or "").isoformat()
+        except Exception:
+            date = ""
+        res.append({"title": (it.findtext("title") or "").strip(), "snippet": (it.findtext("description") or "").strip(),
+                    "url": (it.findtext("link") or "").strip(), "source": "France Info" if url == FIL_NATIONAL else "France 3 Hauts-de-France",
+                    "date": date})
+    return res
+
+
+def _seulement_locales(results: list[dict]) -> list[dict]:
+    """Les fils régionaux mélangent toute la France : on ne garde que ce qui parle de ta région."""
+    def local(r):
+        texte = " ".join(str(r.get(k) or "") for k in ("title", "snippet", "url")).lower()
+        return any(m in texte for m in MOTS_LOCAUX)
+    return [r for r in results if local(r)]
+
+
+def _fil_pour(query: str) -> str:
+    """Le fil officiel qui répond à une demande d'actualités du briefing : local, général, ou aucun (sujet précis)."""
+    q = (query or "").lower()
+    if any(m in q for m in MOTS_LOCAUX):
+        return FIL_LOCAL
+    if not q.strip() or any(m in q for m in ("france monde", "actualités du jour", "world news", "actualités générales")):
+        return FIL_NATIONAL
+    return ""
 
 
 def _format_news(query: str, results: list[dict]) -> str:
@@ -269,7 +352,16 @@ def _news(query: str) -> str:
     ddg_query    = query if query else "world news today"
 
     def _ddg_attempt() -> str:
-        return _format_news(ddg_query, _ddg_news(ddg_query, max_results=8))
+        return _format_news(ddg_query, _garder_recentes(_ddg_news(ddg_query, max_results=8)))
+
+    fil = _fil_pour(query)
+    if fil:   # briefing : les fils officiels d'abord, toujours du jour, sans quota
+        articles = _rss_news(fil)
+        if fil == FIL_LOCAL:
+            articles = _seulement_locales(articles)
+        text = _format_news(ddg_query, _garder_recentes(articles, jours=2)[:6])
+        if not text.startswith("No news found"):
+            return text
 
     text = _run_bounded(_ddg_attempt, timeout=5.0, label="DDG news")
     if text and len(text) > 60 and not text.startswith("No news found"):
@@ -280,6 +372,11 @@ def _news(query: str) -> str:
     )
     if text and len(text) > 60:
         return text
+
+    if fil != FIL_NATIONAL:   # dernier secours : les grands titres du jour plutôt que rien
+        text = _format_news(ddg_query, _garder_recentes(_rss_news(FIL_NATIONAL), jours=2)[:6])
+        if not text.startswith("No news found"):
+            return text
 
     return f"No news found for: {query}"
 

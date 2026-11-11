@@ -3,14 +3,18 @@
 # J.A.R.V.I.S — Mark LV · Édition française
 
 **Un assistant vocal pour Windows qui écoute, parle, voit ton écran, pilote ton PC et se souvient de toi.**
-Interface holographique en 4K, mémoire à long terme et un « second cerveau » relié à Claude Code.
+Une **Galaxie** qui montre ton cerveau en 3D, un tableau de bord **Jarvis OS**, une mémoire à long terme et un « second cerveau » relié à Claude Code.
 
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Gemini Live](https://img.shields.io/badge/Gemini-Live%20API-8E75B2?logo=googlegemini&logoColor=white)
 ![Licence](https://img.shields.io/badge/licence-CC%20BY--NC%204.0-lightgrey)
 
-<img src="docs/apercu.png" alt="L'écran de Jarvis : le grand cercle bleu, les graphiques du PC et les circuits" width="100%">
+<img src="docs/galaxie.png" alt="La Galaxie : ton cerveau en étoiles, avec le cœur J.A.R.V.I.S. et les boutons MICRO, HOLO, TABLEAU et FOCUS" width="100%">
+
+<img src="docs/jarvis-os.png" alt="Jarvis OS : l'heure, ce qui t'attend, les routines, les promesses et les dernières séances" width="100%">
+
+*Les deux écrans de Jarvis, ici avec un cerveau de démonstration (personnage fictif).*
 
 *Version française améliorée et non officielle de [**Mark LV**](https://www.youtube.com/@FatihMakes), le Jarvis open source de **FatihMakes**.*
 
@@ -27,6 +31,7 @@ Interface holographique en 4K, mémoire à long terme et un « second cerveau »
 - [Avant de commencer : Obsidian et ta clé Gemini](#-avant-de-commencer--obsidian-et-ta-clé-gemini)
 - [Installation en une ligne](#-installation-en-une-ligne)
 - [Premier lancement](#-premier-lancement)
+- [Nouveautés de la version 1.1](#-nouveautés-de-la-version-11)
 - [Ce que sait faire Jarvis](#-ce-que-sait-faire-jarvis)
 - [Le second cerveau (Claude Code)](#-le-second-cerveau-claude-code)
 - [Brancher Gmail](#-brancher-gmail)
@@ -119,6 +124,39 @@ Remplace `TON-NOM` par ton nom de session Windows (celui qui apparaît dans `C:\
 
 ---
 
+## ✨ Nouveautés de la version 1.1
+
+### La Galaxie : ton cerveau en étoiles
+Chaque page de ton cerveau devient une étoile, reliée aux pages qu'elle cite. Tu cherches, tu cliques sur une étoile pour la lire, tu vois les pages les plus reliées. Au centre, le cœur **J.A.R.V.I.S.** s'allume quand il écoute ou parle. La Galaxie **remplace l'ancien grand cercle bleu**, supprimé.
+
+| Bouton | À quoi il sert |
+|---|---|
+| **MICRO** | Coupe ou remet ton micro d'un clic. Utile quand tu parles à quelqu'un d'autre : Jarvis ne répond plus |
+| **HOLO** | Le cerveau en hologramme (à la main si tu as une webcam, à la souris sinon) |
+| **TABLEAU** | Ouvre Jarvis OS |
+| **FOCUS** | Cache tout sauf les étoiles. Un bouton **« Quitter le focus »** reste visible, ou appuie sur **Échap** |
+| **ANNEAU / CUBE / VISAGE** | Trois façons de voir le cœur de Jarvis |
+
+### Jarvis OS : le centre de commande
+Une seconde page (bouton **TABLEAU**, ou `http://localhost:4719/tableau`) : l'heure, **ce qui t'attend** (tes tâches dans `wiki/a-faire.md` qui commencent par « Moi : »), les **routines**, les **promesses** captées par Jarvis, les dernières séances, les rappels des 14 prochains jours et le compteur d'un objectif de 90 jours (écris `Compteur 90 jours : début le JJ/MM/AAAA` dans `wiki/objectif.md`). Six vues du cerveau : anneaux, cercle, domaines, liens, chronologie, orbite 3D. Tout est en **lecture seule** : Jarvis ne coche jamais une tâche à ta place.
+
+### Le cerveau local (Ollama)
+« Jarvis, passe sur ton cerveau local » : plus de Gemini, plus d'Internet. Tes questions, les réponses et la voix restent **sur ton PC**. Le modèle lit la fiche du cerveau et les passages du wiki liés à ta question. « Repasse sur ton cerveau en ligne » le remet en ligne.
+
+À installer une fois :
+1. [Ollama](https://ollama.com), puis dans PowerShell : `ollama pull qwen3.5:9b`
+2. Les oreilles locales : `.venv\Scripts\python.exe -m pip install faster-whisper` (le modèle de reconnaissance de la voix, environ 480 Mo, se télécharge au premier usage)
+
+Limite honnête : ce mode **discute**, il ne pilote pas le PC (pas d'ouverture de programmes, pas de mails). Il le dit plutôt que de faire semblant. Si Ollama ne répond pas, Jarvis reste en ligne et te le dit.
+
+### Corrections
+- **Des actualités fraîches** : le briefing du matin ne répète plus de vieux articles. Seuls les articles récents sont gardés (2 jours pour le briefing, 7 jours pour une recherche), et les actualités générales viennent du fil RSS officiel de France Info. Les nouvelles de ta ville viennent de la recherche, toujours filtrées sur les articles récents. Pour un fil régional, renseigne `FIL_LOCAL` et `MOTS_LOCAUX` dans `actions/web_search.py`.
+- **Un chronomètre de blocage** : si Jarvis se fige, `jarvis.log` note l'heure et l'endroit (lignes `[Chrono]`).
+- **Extinction propre** : fermer la Galaxie éteint Jarvis, qui finit sa phrase d'au revoir avant de quitter.
+- **L'ancien écran bleu est supprimé**, avec ses fichiers.
+
+---
+
 ## 🧠 Ce que sait faire Jarvis
 
 ### La voix et la conversation
@@ -169,12 +207,14 @@ Remplace `TON-NOM` par ton nom de session Windows (celui qui apparaît dans `C:\
 ### L'interface
 | | |
 |---|---|
-| 🔵 **Grand cercle bleu** | Une interface holographique en 4K. Le cœur s'allume quand il écoute ou parle, et des lumières filent dans les circuits |
-| 🖱️ **Tout est cliquable** | Les programmes et les dossiers sont dans la couronne du cercle ; la musique, les sites, la météo et la corbeille autour |
-| 📈 **Vrais chiffres du PC** | Processeur par cœur, mémoire, disques, réseau, temps de marche, en direct |
-| 🧘 **Mode calme** | Rien ne bouge à part les lumières, pour ne pas fatiguer les yeux |
+| 🌌 **La Galaxie** | Ton cerveau en étoiles, avec recherche, filtres par domaine, vue 2D ou 3D et le cœur de Jarvis qui réagit à la voix |
+| 🖥️ **Jarvis OS** | Le tableau de bord : tâches, routines, promesses, séances, rappels, objectif de 90 jours |
+| 🎙️ **Bouton MICRO** | Coupe ou remet ton micro d'un clic, sur les deux pages |
+| 🎯 **Mode FOCUS** | Que les étoiles, avec un bouton visible pour en sortir |
 | 📱 **Télécommande** | Pilote Jarvis depuis ton téléphone (QR code) |
-| ✋ **Cerveau en hologramme** *(nouveau)* | « Jarvis, montre-moi le cerveau en hologramme » : tes dossiers deviennent des bulles bleues. **Avec une webcam**, tu les attrapes et les lances avec la main (pincer, écarter les mains pour zoomer) ; **sans webcam**, tout marche à la souris. Les images de la caméra ne quittent jamais ton PC |
+| ✋ **Cerveau en hologramme** | « Jarvis, montre-moi le cerveau en hologramme » : tes dossiers deviennent des bulles. **Avec une webcam**, tu les attrapes et les lances avec la main (pincer, écarter les mains pour zoomer) ; **sans webcam**, tout marche à la souris. Les images de la caméra ne quittent jamais ton PC |
+
+La Galaxie s'ouvre dans une fenêtre de **Chrome** (ou de ton navigateur habituel s'il n'est pas là) à l'adresse `http://localhost:4719`. Fermer cette fenêtre éteint Jarvis.
 
 ---
 
@@ -218,15 +258,12 @@ Tout se règle dans `memory\interface.json` (bloc-notes suffit), puis on relance
 | Réglage | Exemple | Rôle |
 |---|---|---|
 | `ville`, `latitude`, `longitude` | `"Lyon"`, `45.76`, `4.83` | La ville de la météo |
-| `ecran` | `"BenQ"` | Ouvrir Jarvis sur l'écran dont le nom contient ce mot (vide = écran principal) |
-| `calme` | `true` | `true` : rien ne bouge à part les lumières ; `false` : le cercle tourne très lentement |
+| `ecran` | `""` | Ouvrir la fenêtre de Jarvis sur l'écran dont le nom contient ce mot (vide = écran principal) |
 | `casque` | `false` | `true` si tu portes un casque (permet de couper la parole à Jarvis) |
 | `cerveau` | `""` | Chemin du cerveau (vide = `Documents\Cerveau`) |
-| `musique_demarrage` | `true` | Joue la musique posée dans `assets\musique-demarrage\` à l'ouverture |
 | `actus` | `"locale"` | Les actualités du briefing de démarrage. **Par défaut : celles de ta ville** (celle que Jarvis a apprise). `"monde"` = France et monde, ou un mot de ton choix (`"Dunkerque"`, `"football"`…). Si rien n'est trouvé, il donne les actualités générales |
 
-Le nom de l'assistant, ton nom, sa voix et sa couleur se changent aussi depuis l'interface (**⚙ SETUP**).
-Raccourcis : **F3** envoie Jarvis sur l'écran suivant (ou dis « Jarvis, change d'écran »), **F2** passe en mode épuré, **F11** passe en fenêtre (que tu déplaces ensuite en l'attrapant à la souris n'importe où ; F11 de nouveau pour le plein écran), **F4** coupe le micro. Les touches ne marchent que si la fenêtre de Jarvis est active : clique d'abord dessus, ou utilise la commande vocale.
+Le micro se coupe et se remet avec le bouton **MICRO** de la Galaxie ou de Jarvis OS. En cerveau local, **Échap** coupe la parole de Jarvis.
 
 📄 **Toutes les commandes que Jarvis sait faire** sont dans le fichier [`COMMANDES.txt`](COMMANDES.txt).
 
@@ -258,7 +295,7 @@ Copy-Item cerveau-modele "$([Environment]::GetFolderPath('MyDocuments'))\Cerveau
 .\Lancer-Jarvis.bat
 ```
 
-Vérifier que tout va bien : `.venv\Scripts\python.exe -m unittest discover tests`
+Vérifier que tout va bien : `.venv\Scripts\python.exe -m unittest discover -s tests`
 
 ---
 
@@ -280,7 +317,8 @@ Vérifier que tout va bien : `.venv\Scripts\python.exe -m unittest discover test
 Cette édition reprend tout le moteur de Mark LV et ajoute :
 
 - **Tout en français** : la voix, les phrases, les commandes et la documentation.
-- **Une nouvelle interface** : le grand cercle bleu en 4K, avec un effet néon, des circuits vivants, des raccourcis cliquables, les vrais chiffres du PC et un mode calme.
+- **Une nouvelle interface** : la Galaxie (ton cerveau en étoiles) et Jarvis OS (le tableau de bord), avec bouton MICRO et mode FOCUS.
+- **Un cerveau local** (Ollama) pour discuter sans Internet, et **des actualités toujours fraîches**.
 - **Le second cerveau** relié à Claude Code, avec un modèle vierge et une installation guidée.
 - **La première rencontre** : Jarvis fait connaissance, étape par étape.
 - **Gmail** en lecture seule, branché en un double-clic.

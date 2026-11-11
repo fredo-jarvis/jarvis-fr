@@ -70,58 +70,7 @@ class TestBugsDejaCorriges(unittest.TestCase):
                 cc.WIKI = ancien
         self.assertIn("**Prénom** : Cyril", texte)
 
-    def test_compteur_processeur_demarre_mesure(self):
-        # Bug du 31/10 : le compteur CPU affichait 0 % car la 1re mesure de psutil n'était pas amorcée.
-        source = (RACINE / "core" / "iron_hud.py").read_text(encoding="utf-8")
-        init = source.split("class _Donnees:")[1].split("def maj(self)")[0]
-        self.assertIn("psutil.cpu_percent(None)", init)
-
-
-class TestMeteoVille(unittest.TestCase):
-    """Bug d'Abdel (31/10) : la ville apprise par Jarvis n'était pas utilisée, la météo restait sur Paris."""
-
-    def setUp(self):
-        try:
-            import core.iron_hud as hud
-        except Exception as e:      # PyQt6 absent : test ignoré
-            self.skipTest(f"iron_hud non importable : {e}")
-        import json
-        import tempfile
-        self.hud = hud
-        self.tmp = tempfile.TemporaryDirectory()
-        t = Path(self.tmp.name)
-        self.sauve = (hud.INTERFACE, hud.MEMOIRE, hud.GEO_CACHE, hud._geocoder)
-        hud.INTERFACE, hud.MEMOIRE, hud.GEO_CACHE = t / "interface.json", t / "long_term.json", t / "geo.json"
-        self.json = json
-
-    def tearDown(self):
-        h = self.hud
-        h.INTERFACE, h.MEMOIRE, h.GEO_CACHE, h._geocoder = self.sauve
-        self.tmp.cleanup()
-
-    def _memoire(self, ville):
-        self.hud.MEMOIRE.write_text(self.json.dumps({"identity": {"city": {"value": ville}}}), encoding="utf-8")
-
-    def test_ville_apprise_utilisee(self):
-        self._memoire("Lille")
-        self.hud._geocoder = lambda v: {"ville": v, "lat": 50.63, "lon": 3.06}
-        self.assertEqual(self.hud._lieu()["ville"], "Lille")
-
-    def test_sans_ville_on_garde_paris(self):
-        self.assertEqual(self.hud._lieu()["ville"], "Paris")
-
-    def test_geocodage_en_panne_retombe_sur_paris(self):
-        self._memoire("Lille")
-        self.hud._geocoder = lambda v: None
-        self.assertEqual(self.hud._lieu()["ville"], "Paris")
-
-    def test_reglage_manuel_prioritaire(self):
-        self._memoire("Lille")
-        self.hud.INTERFACE.write_text(self.json.dumps({"ville": "Nice", "latitude": 43.7, "longitude": 7.26}),
-                                      encoding="utf-8")
-        self.hud._geocoder = lambda v: {"ville": v, "lat": 50.63, "lon": 3.06}
-        self.assertEqual(self.hud._lieu()["ville"], "Nice")
-
+    # (Le compteur CPU et la météo de l'ancien écran bleu ont été supprimés avec lui, en 1.1.)
 
 class TestChangerEcran(unittest.TestCase):
     """Bug de Jibis Lucius (01/11) : avec trois écrans, impossible de déplacer Jarvis."""
@@ -160,7 +109,7 @@ class TestChangerEcran(unittest.TestCase):
 
 
 class TestFenetreDeplacable(unittest.TestCase):
-    """Demande de Fredo (01/11) : pouvoir mettre Jarvis en fenêtre et le déplacer à la souris."""
+    """Demande d'un utilisateur (01/11) : pouvoir mettre Jarvis en fenêtre et le déplacer à la souris."""
 
     def test_rectangle_de_la_fenetre(self):
         try:
@@ -338,7 +287,7 @@ class TestLireTousLesFichiers(unittest.TestCase):
 
 
 class TestFichiersRetenus(unittest.TestCase):
-    """Question de Fredo (01/11) : à chaque séance il fallait redonner le fichier à Jarvis."""
+    """Question d'un utilisateur (01/11) : à chaque séance il fallait redonner le fichier à Jarvis."""
 
     def setUp(self):
         import tempfile
@@ -488,14 +437,14 @@ class TestCerveauDansOneDrive(unittest.TestCase):
 
 
 class TestActusDuBriefing(unittest.TestCase):
-    """Demande de Fredo (01/11) : actualités locales au démarrage plutôt que celles du monde."""
+    """Demande d'un utilisateur (01/11) : actualités locales au démarrage plutôt que celles du monde."""
 
     def test_requete_selon_le_reglage(self):
         from core.actus import GENERALE, requete_actus
-        self.assertEqual(requete_actus("", "Gravelines"), GENERALE)
-        self.assertEqual(requete_actus("monde", "Gravelines"), GENERALE)
+        self.assertEqual(requete_actus("", "Lilleville"), GENERALE)
+        self.assertEqual(requete_actus("monde", "Lilleville"), GENERALE)
         self.assertEqual(requete_actus(None, ""), GENERALE)
-        self.assertEqual(requete_actus("locale", "Gravelines"), "actualités Gravelines aujourd'hui")
+        self.assertEqual(requete_actus("locale", "Lilleville"), "actualités Lilleville aujourd'hui")
         self.assertEqual(requete_actus("Locale", "Lille"), "actualités Lille aujourd'hui")
         self.assertEqual(requete_actus("locale", ""), GENERALE)          # ville pas encore connue
         self.assertEqual(requete_actus("Dunkerque", "Lille"), "actualités Dunkerque aujourd'hui")

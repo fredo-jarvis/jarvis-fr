@@ -58,3 +58,6 @@ memory/carnet-cerveau.md      # notes personnelles pour le cerveau de l'utilisat
 memory/fichiers/              # copies des fichiers donnés à Jarvis (privé)
 memory/*.json                 # réglages et mémoire personnels
 !memory/interface.json         # réglages par défaut fournis (écran, ville, cerveau)
+
+# ── Installateur .exe construit (publié comme fichier de la version, pas dans le dépôt) ──
+installateur/sortie/

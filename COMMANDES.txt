@@ -6,13 +6,20 @@ Les exemples ci-dessous montrent l'idée, tu peux les dire à ta façon.
 Pour l'appeler : dis son nom (« Hey Jarvis ») ou maintiens Ctrl + Espace.
 
 ---------------------------------------------------------------------
- TOUCHES DU CLAVIER (la fenêtre de Jarvis doit être active)
+ LES BOUTONS DE LA GALAXIE ET DE JARVIS OS (http://localhost:4719)
 ---------------------------------------------------------------------
- F2  : passe de l'écran épuré (grand cercle bleu) à l'interface complète
- F3  : envoie Jarvis sur l'écran suivant (si tu as plusieurs écrans)
- F4  : coupe / remet le micro
- F11 : fenêtre déplaçable à la souris  <->  plein écran
- Échap : coupe la parole de Jarvis
+ MICRO   : coupe / remet ton micro (sur les deux pages)
+ HOLO    : le cerveau en hologramme (« Jarvis, montre-moi le cerveau en hologramme »)
+ TABLEAU : ouvre Jarvis OS, le tableau de bord (la page Galaxie y ramène)
+ FOCUS   : cache tout sauf les étoiles. « Quitter le focus » ou Échap pour revenir
+ Échap   : en cerveau local, coupe la parole de Jarvis
+
+---------------------------------------------------------------------
+ LE CERVEAU LOCAL (version 1.1, demande Ollama installé)
+---------------------------------------------------------------------
+ - « Jarvis, passe sur ton cerveau local » : tout reste sur ton PC, sans Internet.
+   Il discute et répond avec tes notes, mais il ne pilote pas le PC.
+ - « Repasse sur ton cerveau en ligne » : retour à Gemini.
 
 ---------------------------------------------------------------------
  CONVERSATION ET MÉMOIRE

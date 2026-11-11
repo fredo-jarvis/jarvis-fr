@@ -115,6 +115,9 @@ from memory.config_manager     import (
     get_wake_word_enabled, save_wake_word_enabled,    get_input_device, get_output_device,
 )
 from core                     import gemini as _gemini
+from core                     import cerveau_local
+from core                     import oreilles_locales
+from core                     import sortie_tele
 from core.plugin_loader        import discover_plugins
 from core                      import undo as undo_stack
 from core                      import confirm as confirm_gate
@@ -629,6 +632,7 @@ class JarvisLive:
         self.ui.on_push_to_talk   = self.set_push_to_talk
         self.ui.ptt_hold          = self._on_ptt
         self.ui.on_text_command   = self._on_text_command
+        self.ui.changer_cerveau   = self.changer_cerveau   # les plugins reçoivent la fenêtre, pas JarvisLive
         self.ui.on_remote_clicked = self._make_remote_key
         self.ui.on_interrupt      = self.interrupt
         self.ui.on_voice_change   = self._on_voice_change     # voice picker → rebuild session
@@ -654,6 +658,14 @@ class JarvisLive:
         self._turn_done_event: asyncio.Event | None = None
         self._dashboard     = None
         self._briefing_sent    = False          # morning briefing fires once per process
+        # Cerveau local (Ollama), ajouté le 04/11/2026 : voir core/cerveau_local.py
+        self._cerveau          = "cloud"        # "cloud" (Gemini Live) ou "local" (Ollama). Redémarrer = retour à "cloud".
+        self._file_locale      = cerveau_local.nouvelle_file()
+        self._voix_locale      = None
+        self._tele_curseur     = 0.0
+        self._annule_local     = threading.Event()
+        self._oreilles_locales = None           # Whisper, gardé en mémoire une fois chargé
+        self._repos_local      = "SLEEPING"     # "LISTENING" dès que le micro local écoute
         self._sys_monitor      = SystemMonitor()  # persistent cooldown state
         self._proactive        = ProactiveEngine()
         self._last_user_speech = time.monotonic()  # updated on every user utterance
@@ -737,7 +749,7 @@ class JarvisLive:
         self.wake(reason="wake word")
 
     def _sous_titre(self, cle: str, texte: str) -> None:
-        """Sous-titres de l'écran HUD vivant (core/jarvis_vivant.py, 28/10) : simple dépôt de texte."""
+        """Sous-titres de l'écran : simple dépôt de texte."""
         try:
             hud = self.ui._win.hud
             setattr(hud, cle, texte)
@@ -897,7 +909,191 @@ class JarvisLive:
         manual = self._dashboard.get_manual_url()
         return url, key, f"{url}/auto-login?key={key}", manual
 
+    def changer_cerveau(self, voulu: str) -> str:
+        """Passe sur le cerveau local (Ollama) ou le remet en ligne (Gemini). Rend une phrase pour l'utilisateur.
+        Appelable depuis n'importe quel fil. On vérifie AVANT de couper Gemini : si Ollama ne répond pas, rien ne change."""
+        if voulu == self._cerveau:
+            return "Je suis déjà sur ce cerveau."
+        if voulu == "local":
+            ok, detail = cerveau_local.pret()
+            if not ok:
+                return f"Je reste en ligne : {detail}"
+            self._annule_local.clear()
+            self._cerveau = "local"
+            self.request_reconnect(keep_context=True, reason="cerveau local")
+            return f"Je passe sur le cerveau local ({detail})."
+        self._cerveau = "cloud"
+        self._annule_local.set()
+        if self._voix_locale:
+            self._voix_locale.couper()
+        return "Je repasse sur le cerveau en ligne."
+
+    async def _ecouter_local(self):
+        """Le micro du mode local : Whisper écrit ce qui est dit, et ça suit le même chemin qu'une question tapée.
+        Si Whisper ou le micro manquent, Jarvis le dit et le clavier continue de marcher."""
+        import queue as _queue
+        try:
+            if self._oreilles_locales is None:
+                self._oreilles_locales = oreilles_locales.Oreilles()
+            await asyncio.to_thread(self._oreilles_locales.charger)
+            blocs = _queue.Queue(maxsize=400)
+
+            def callback(indata, frames, time_info, status):
+                # L'utilisateur a des haut-parleurs : pendant que Jarvis parle, le micro l'entendrait lui-même.
+                if self._is_speaking or self._tail_active():
+                    return
+                try:
+                    blocs.put_nowait(indata.copy())
+                except _queue.Full:
+                    pass
+
+            def ouvrir(dev):
+                return sd.InputStream(samplerate=oreilles_locales.TAUX, channels=1, dtype="float32",
+                                      blocksize=CHUNK_SIZE, device=dev, callback=callback)
+            dev = audio_devices.resolve(get_input_device(), "input")
+            try:
+                flux = ouvrir(dev)
+            except Exception:
+                if dev is None:
+                    raise
+                flux = ouvrir(None)
+            decoupeur = oreilles_locales.Decoupeur()
+            with flux:
+                self._repos_local = "LISTENING"
+                if not self._is_speaking:
+                    self.ui.set_state("LISTENING")
+                self.ui.write_log("SYS: Micro local actif : je t'écoute." +
+                                  (" Commence par « Jarvis »." if self._wake_enabled else ""))
+                _t_journal, _max_vol = time.time(), 0.0
+                while self._cerveau == "local":
+                    try:
+                        bloc = await asyncio.to_thread(blocs.get, True, 0.3)
+                    except _queue.Empty:
+                        continue
+                    # Toutes les 10 s, le volume du micro dans le journal : sans ça, un micro muet est invisible.
+                    _max_vol = max(_max_vol, float(np.sqrt(np.mean(bloc * bloc))))
+                    if time.time() - _t_journal > 10:
+                        print(f"[Oreilles] micro : volume max {_max_vol:.4f}, seuil {decoupeur.seuil():.4f}")
+                        _t_journal, _max_vol = time.time(), 0.0
+                    phrase = decoupeur.ajouter(bloc)
+                    if phrase is None:
+                        continue
+                    _t0 = time.time()
+                    texte = await asyncio.to_thread(self._oreilles_locales.transcrire, phrase)
+                    print(f"[Oreilles] {len(phrase) / oreilles_locales.TAUX:.1f} s de micro, écrit en {time.time() - _t0:.1f} s, "
+                          f"seuil {decoupeur.seuil():.3f} : {texte[:60]!r}")
+                    commande = oreilles_locales.nettoyer(texte, self._wake_enabled)
+                    if commande:
+                        self._on_text_command(commande)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[Oreilles locales] {type(e).__name__}: {e}")
+            self._repos_local = "SLEEPING"
+            self.ui.write_log("SYS: Micro local indisponible : tape tes questions.")
+        finally:
+            self._repos_local = "SLEEPING"
+
+    async def _boucle_locale(self):
+        """Remplace la session Gemini tant que Jarvis est sur le cerveau local : Whisper écoute, Ollama répond,
+        la voix de Windows parle. Rien ne sort du PC. Les questions tapées marchent aussi."""
+        self.session = None
+        self.set_speaking(False)
+        if self._voix_locale is None:
+            sortie = audio_devices.resolve(get_output_device(), "output")
+            self._voix_locale = await asyncio.to_thread(cerveau_local.nouvelle_voix, False, sortie)
+        # Tout est chargé AVANT de dire « activé » : ta première phrase n'attend plus.
+        self.ui.set_state("THINKING")
+        self.ui.write_log("SYS: Chargement du cerveau local…")
+        await asyncio.to_thread(cerveau_local.prechauffer)
+        try:
+            if self._oreilles_locales is None:
+                self._oreilles_locales = oreilles_locales.Oreilles()
+            await asyncio.to_thread(self._oreilles_locales.charger)
+        except Exception as e:
+            print(f"[Oreilles locales] {type(e).__name__}: {e}")
+        histoire = []
+        self.ui.set_state("SLEEPING")
+        self.ui.write_log(f"SYS: Cerveau local actif ({cerveau_local.modele()}). "
+                          "Pour revenir : « repasse sur ton cerveau en ligne ».")
+
+        def parler(phrase: str):
+            self.set_speaking(True)
+            self.ui.set_state("SPEAKING")
+            self._voix_locale.dire(phrase)
+
+        await asyncio.to_thread(parler, "Cerveau local activé.")
+        self.set_speaking(False)
+        self.ui.set_state(self._repos_local)
+        ecoute = asyncio.create_task(self._ecouter_local())
+        try:
+          while self._cerveau == "local":
+            try:
+                texte = await asyncio.to_thread(self._file_locale.get, True, 0.5)
+            except Exception:
+                continue
+            self._annule_local.clear()
+            self.ui.write_log(f"You: {texte}")
+            self.ui.set_state("THINKING")
+            try:
+                _t0 = time.time()
+                _premiere = []
+
+                def _parler_chrono(phrase):
+                    if not _premiere:
+                        _premiere.append(time.time() - _t0)
+                    parler(phrase)
+                reponse = await asyncio.to_thread(cerveau_local.repondre, texte, histoire, _parler_chrono, self._annule_local)
+                print(f"[Cerveau local] première phrase après {(_premiere or [0])[0]:.1f} s, tout dit en {time.time() - _t0:.1f} s")
+                self.ui.write_log(f"Jarvis: {reponse}")
+            except Exception as e:
+                print(f"[Cerveau local] {type(e).__name__}: {e}")
+                self.ui.write_log("ERR: Le cerveau local n'a pas répondu. Rien n'a été fait.")
+                await asyncio.to_thread(parler, "Le cerveau local n'a pas répondu.")
+            self.set_speaking(False)
+            self.ui.set_state(self._repos_local)
+        finally:
+            ecoute.cancel()
+        self.ui.set_state("THINKING")
+
+    async def _extinction_propre(self):
+        """« Éteins-toi » entendu : on enregistre la séance pendant son au revoir, puis on ferme (plus de 10 s d'attente, 05/11)."""
+        sauvegarde = asyncio.create_task(self._save_session_summary())
+        await asyncio.sleep(2.5)                # le temps de son au revoir, s'il en dit un
+        try:
+            await asyncio.wait_for(sauvegarde, timeout=2.5)
+        except Exception:
+            pass
+        _eteindre_tout()
+
+    def _extinction_directe(self):
+        if getattr(self, "_extinction_en_cours", False):
+            return
+        self._extinction_en_cours = True
+        self.ui.write_log("SYS: Extinction demandée.")
+        threading.Timer(30.0, _eteindre_tout).start()
+        asyncio.create_task(self._extinction_propre())
+
+
     def _on_text_command(self, text: str):
+        if self._cerveau == "local" and cerveau_local.extinction_demandee(text):
+            self.ui.write_log("SYS: Extinction demandée.")
+            def _au_revoir():
+                try:
+                    self.set_speaking(True)
+                    if self._voix_locale:
+                        self._voix_locale.dire("Au revoir.")
+                finally:
+                    _eteindre_tout()
+            threading.Thread(target=_au_revoir, daemon=True, name="extinction-locale").start()
+            return
+        voulu = cerveau_local.changement_demande(text)
+        if voulu and voulu != self._cerveau:
+            self.ui.write_log("SYS: " + self.changer_cerveau(voulu))
+            return
+        if self._cerveau == "local":
+            self._file_locale.put(text)
+            return
         if not self._loop or not self.session:
             return
         # Respect wake-word sleep: a typed command must not be answered while
@@ -1021,6 +1217,11 @@ class JarvisLive:
     def interrupt(self) -> None:
         """Stop JARVIS mid-speech: drain queued audio and open mic immediately."""
         self._interrupted = True
+        sortie_tele.SORTIE.vider()
+        if self._cerveau == "local":                # Échap coupe aussi la voix locale
+            self._annule_local.set()
+            if self._voix_locale:
+                self._voix_locale.couper()
         q = self.audio_in_queue
         if q:
             drained = 0
@@ -1409,34 +1610,37 @@ class JarvisLive:
                 self.ui.write_log("SYS: Shutdown requested.")
                 self._extinction_en_cours = True
                 # Filet de sécurité : quoi qu'il arrive, Jarvis se ferme au bout de 30 s (40 s avant le 28/10).
-                import os as _os_secours
                 import threading as _th
-                _secours = _th.Timer(30.0, lambda: _os_secours._exit(0))
+                _secours = _th.Timer(30.0, _eteindre_tout)
                 _secours.daemon = True
                 _secours.start()
                 async def _do_shutdown():
-                    try:
-                        await asyncio.wait_for(self._save_session_summary(), timeout=10)
-                    except Exception:
-                        pass
+                    # Le résumé de la séance s'enregistre PENDANT l'au revoir.
+                    sauvegarde = asyncio.create_task(self._save_session_summary())
                     # (Plus de deuxième demande d'au revoir ici : Jarvis disait deux phrases, 30/10.
                     # L'unique au revoir est sa réponse au résultat de l'outil, plus bas.)
-                    # Laisser Jarvis finir sa phrase avant de quitter (demande de
-                    # l'utilisateur, 2026-10-25) : avant, on coupait au bout de 1,5 s fixe.
+                    # Laisser Jarvis finir sa phrase avant de quitter.
                     _t0 = time.time()
-                    while not self._is_speaking and time.time() - _t0 < 5.0:
-                        await asyncio.sleep(0.1)          # attendre qu'il commence
-                    # Fini = 1,5 s sans parler (l'au revoir peut suivre une 1re phrase).
-                    _t1 = _dernier = time.time()
-                    while time.time() - _t1 < 10.0:     # un au revoir ne dure pas plus
+                    deja_parle = False
+                    while time.time() - _t0 < 4.0:        # attendre qu'il commence
                         if self._is_speaking or not self.audio_in_queue.empty():
-                            _dernier = time.time()
-                        elif time.time() - _dernier > 1.5:
+                            deja_parle = True
                             break
                         await asyncio.sleep(0.1)
-                    await asyncio.sleep(self._out_latency + 0.6)   # les haut-parleurs ont du retard
-                    import os as _os
-                    _os._exit(0)
+                    # Fini = 1,2 s sans parler (l'au revoir peut suivre une 1re phrase).
+                    _dernier = time.time()
+                    while deja_parle and time.time() - _t0 < 12.0:     # un au revoir ne dure pas plus
+                        if self._is_speaking or not self.audio_in_queue.empty():
+                            _dernier = time.time()
+                        elif time.time() - _dernier > 1.2:
+                            break
+                        await asyncio.sleep(0.1)
+                    await asyncio.sleep(self._out_latency + 0.4)   # les haut-parleurs ont du retard
+                    try:
+                        await asyncio.wait_for(sauvegarde, timeout=2.0)
+                    except Exception:
+                        pass
+                    _eteindre_tout()
                 asyncio.create_task(_do_shutdown())
                 result = ("Shutdown in progress. Say ONE short goodbye sentence now, only one, "
                           "then nothing else. Do not call any tool.")
@@ -1813,6 +2017,8 @@ class JarvisLive:
                                 self._last_out_logged = ""   # new exchange
                                 self.ui.write_log(f"You: {full_in}")
                                 self._session_log.append(f"User: {full_in}")
+                                if cerveau_local.extinction_demandee(full_in):
+                                    self._extinction_directe()
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "user",
@@ -1988,7 +2194,14 @@ class JarvisLive:
                     pass
 
                 try:
-                    await asyncio.to_thread(stream.write, bytes(batch))
+                    if sortie_tele.SORTIE.actif():      # L'utilisateur a parlé depuis la télé : la réponse sort là-bas
+                        sortie_tele.SORTIE.envoyer(bytes(batch), RECEIVE_SAMPLE_RATE)
+                        # Toujours un peu d'avance sur la télé, sans dérive : sinon son tampon se vide et le son crépite.
+                        _maint = time.time()
+                        self._tele_curseur = max(_maint, self._tele_curseur) + len(batch) / 2 / RECEIVE_SAMPLE_RATE
+                        await asyncio.sleep(max(0.0, self._tele_curseur - _maint - 0.4))
+                    else:
+                        await asyncio.to_thread(stream.write, bytes(batch))
                 except (RuntimeError, asyncio.CancelledError):
                     break   # executor shutting down — exit cleanly
         except Exception as e:
@@ -2385,6 +2598,13 @@ class JarvisLive:
         # cannot be opened at them.
         audio_devices.configure(SEND_SAMPLE_RATE, RECEIVE_SAMPLE_RATE)
 
+        # Chronomètre (07/11/2026) : note dans jarvis.log, avec l'heure, chaque fois que Jarvis se bloque.
+        try:
+            from core import chrono
+            asyncio.create_task(chrono.surveiller(lambda t: print(t, flush=True)))
+        except Exception as e:
+            print(f"[Chrono] désactivé : {e}")
+
         # Enumerate audio devices off-thread. The settings drawer must never pay
         # for host-API enumeration on the Qt thread.
         audio_devices.prefetch()
@@ -2403,6 +2623,9 @@ class JarvisLive:
 
         while True:
             try:
+                if self._cerveau == "local":
+                    await self._boucle_locale()
+                    continue
                 print("[JARVIS] Connecting...")
                 self.ui.set_state("THINKING")
                 # Pick the rung to open the conversation on. A model resting
@@ -2631,17 +2854,66 @@ class JarvisLive:
             print(f"[JARVIS] Reconnecting in {delay}s...")
             await asyncio.sleep(delay)
 
+def _eteindre_tout():
+    """Ferme la fenêtre de la galaxie, puis Jarvis. os._exit ne laisse rien se fermer tout seul :
+    sans ça, la galaxie restait à l'écran et Jarvis semblait toujours allumé (04/11)."""
+    import os as _os
+    try:
+        from galaxie import placement
+        placement.fermer_fenetre_jarvis()
+        time.sleep(0.4)
+    except Exception:
+        pass
+    _os._exit(0)
+
+
+def _relier_galaxie(jarvis, ui):
+    """L'interface de Jarvis : la galaxie (localhost:4719). L'ancienne fenêtre ne s'affiche plus jamais (ui.py)."""
+    from galaxie import server as _galaxie, pont as _pont, placement
+    from ui import _ecran_choisi
+
+    def hologramme():
+        threading.Thread(target=lambda: jarvis._plugin_registry.run("cerveau_hologramme", {"action": "open"}, player=ui),
+                         daemon=True).start()
+
+    pont = _pont.Pont(jarvis, ui, lambda: cerveau_local.modele() if jarvis._cerveau == "local" else LIVE_MODEL,
+                      confirm_gate, holo=hologramme)
+    if not _galaxie.demarrer_dans_jarvis(pont):
+        print("[Galaxie] le port 4719 est occupé : interface non lancée.")
+        return
+    ecran = _ecran_choisi(ui._app) or ui._win.screen()
+    g = ecran.geometry() if ecran is not None else None
+    coin = (g.x(), g.y()) if g is not None else None
+
+    def ouvrir():
+        try:
+            if not _galaxie.ouvrir_fenetre():
+                return
+            cible = placement.poser(coin)
+        except Exception as e:
+            print(f"[Galaxie] fenêtre non ouverte : {e!r}")
+            cible = None
+        print(f"[Galaxie] écran : {cible}")
+        h = placement.trouver_fenetre()
+        if cible is None or not h:              # Chrome n'a pas pu s'ouvrir : le navigateur par défaut
+            import webbrowser
+            webbrowser.open(_galaxie.ADRESSE)
+            return
+        placement.Fenetre(h).attendre()
+        _eteindre_tout()                        # fermer la galaxie éteint Jarvis
+
+    threading.Thread(target=ouvrir, daemon=True, name="galaxie-fenetre").start()
+
 def main():
     ui = JarvisUI("face.png")
-    try:   # musique d'ouverture, comme dans le film (28/10) : assets/musique-demarrage/
-        from core import musique_demarrage
-        musique_demarrage.lancer()
-    except Exception as e:
-        print(f"[Musique] {e!r}")
 
     def runner():
         ui.wait_for_api_key()
         jarvis = JarvisLive(ui)
+        try:
+            _relier_galaxie(jarvis, ui)
+        except Exception as e:                  # jamais une page ne doit empêcher Jarvis de démarrer
+            print(f"[Galaxie] non lancée : {e!r}")
         try:
             asyncio.run(jarvis.run())
         except KeyboardInterrupt:

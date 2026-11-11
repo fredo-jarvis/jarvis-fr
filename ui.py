@@ -507,8 +507,7 @@ def _ecran_choisi(app):
 
 
 def _ecran_suivant(ecrans, actuel):
-    """L'écran d'après dans la liste (on fait le tour), ou None s'il n'y en a qu'un seul
-    (bug de Jibis Lucius, 01/11 : avec trois écrans, rien ne permettait de déplacer Jarvis)."""
+    """L'écran d'après dans la liste (on fait le tour), ou None s'il n'y en a qu'un seul."""
     ecrans = list(ecrans)
     if len(ecrans) < 2:
         return None
@@ -526,18 +525,18 @@ def _rect_fenetre(x, y, w, h):
 
 
 def _load_holo() -> bool:
-    """Écran HUD en vrai hologramme : fenêtre transparente (demande de l'utilisateur, 2026-10-26)."""
+    """Écran Iron Man en vrai hologramme : fenêtre transparente (demande de l'utilisateur, 2026-10-26)."""
     try:
         return bool(json.loads(_MINIMAL_FILE.read_text(encoding="utf-8")).get("holo", True))
     except Exception:
-        return True
+        return False
 
 
 class HudCanvas(QWidget):
     def __init__(self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None):
         super().__init__(parent)
-        self.minimal = False   # mode épuré : écran « HUD » (core/iron_hud.py)
-        self.holo = _load_holo()   # écran HUD transparent : le bureau se voit derrière
+        self.minimal = False   # mode épuré (l'ancien écran « Iron Man » a été supprimé le 2026-11-11)
+        self.holo = _load_holo()   # écran Iron Man transparent : le bureau se voit derrière
         self.setMouseTracking(True)
         if not self.holo:
             self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
@@ -978,15 +977,8 @@ class HudCanvas(QWidget):
                        Qt.AlignmentFlag.AlignCenter, name)
 
     def mousePressEvent(self, e):
-        if self.minimal:
-            try:
-                from core import iron_hud
-                if iron_hud.click(self, e.position()):
-                    return
-            except Exception as ex:
-                print(f"[Iron HUD] clic : {ex}")
         # En fenêtre (F11), on attrape Jarvis n'importe où pour le déplacer à la souris :
-        # la fenêtre n'a pas de barre de titre (demande de Fredo, 01/11).
+        # la fenêtre n'a pas de barre de titre (demande de l'utilisateur, 01/11).
         if e.button() == Qt.MouseButton.LeftButton and not self.window().isFullScreen():
             h = self.window().windowHandle()
             if h is not None:
@@ -1054,15 +1046,10 @@ class HudCanvas(QWidget):
         # fullscreen — without ever colliding with the status text below.
         _sy_status = cy + fw * 0.40
         if self.minimal:
-            # Écran « HUD » : armure, raccourcis, météo, état du PC, musique.
-            try:
-                from core import iron_hud
-                iron_hud.paint(self, p, W, H)
-            except Exception as e:
-                print(f"[Iron HUD] {e}")
-                _r = min(W * 0.46, (H - 24.0) / 2.0)
-                self._paint_core(p, cx, cy, _r, W, H)
-                self._paint_clock(p, W)
+            # Mode épuré : seulement l'anneau et l'heure (l'ancien écran « Iron Man » est supprimé, 2026-11-11).
+            _r = min(W * 0.46, (H - 24.0) / 2.0)
+            self._paint_core(p, cx, cy, _r, W, H)
+            self._paint_clock(p, W)
             p.end()
             return
         if self._avatar is not None and self.hud_style == "face":
@@ -3144,6 +3131,7 @@ class RemoteKeyOverlay(QWidget):
 class MainWindow(QMainWindow):
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
+    _mute_sig       = pyqtSignal(bool)       # bouton MICRO de la page : couper / remettre le micro depuis un autre fil
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _ecran_sig      = pyqtSignal()           # « écran suivant » (touche F3 ou commande vocale)
@@ -3207,12 +3195,12 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         if _load_holo():
-            # Écran HUD en hologramme : fenêtre sans bord et transparente.
+            # Écran Iron Man en hologramme : fenêtre sans bord et transparente.
             self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
             central.setStyleSheet("background: transparent;")
             # Ce qui est derrière (icônes, fenêtres) est flouté et assombri par Windows :
-            # on garde l'effet hologramme sans voir le bureau en détail (l'utilisateur : « ça fait chargé »).
+            # on garde l'effet hologramme sans voir le bureau en détail (« ça fait chargé »).
             if _reglage("flou", False):   # flou coupé le 28/10 : pour garder le vrai transparent
                 QTimer.singleShot(400, lambda: _flou_derriere(int(self.winId())))
         else:
@@ -3441,6 +3429,7 @@ class MainWindow(QMainWindow):
 
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._mute_sig.connect(self._set_muted_par_la_page)
         self._content_sig.connect(self._show_content)
         self._reconfig_sig.connect(self._show_setup)
         self._ecran_sig.connect(self._changer_ecran)
@@ -3480,7 +3469,7 @@ class MainWindow(QMainWindow):
         sc_full.activated.connect(self._toggle_fullscreen)
         sc_intr = QShortcut(QKeySequence("Escape"), self)
         sc_intr.activated.connect(self._do_interrupt)
-        # Mode épuré « HUD » (demande de l'utilisateur, 2026-10-24) : F2 bascule.
+        # Mode épuré « Iron Man » (demande de l'utilisateur, 2026-10-24) : F2 bascule.
         sc_min = QShortcut(QKeySequence("F2"), self)
         sc_min.activated.connect(self._toggle_minimal)
         sc_ecran = QShortcut(QKeySequence("F3"), self)
@@ -5794,6 +5783,10 @@ class MainWindow(QMainWindow):
         self._video_auto_muted = False
         self._set_muted(not self._muted)
 
+    def _set_muted_par_la_page(self, muted: bool):
+        self._video_auto_muted = False      # un choix volontaire, comme un appui sur F4
+        self._set_muted(muted)
+
     def _set_muted(self, muted: bool, note: str = ""):
         muted = bool(muted)
         if muted == self._muted:
@@ -5848,6 +5841,8 @@ class MainWindow(QMainWindow):
             return False
 
     def _show_setup(self):
+        if not self.isVisible():        # fenêtre cachée (interface galaxie) : la saisie de la clé doit se voir
+            self.showNormal()
         ov = SetupOverlay(self.centralWidget())
         cw = self.centralWidget()
         ow, oh = 460, 390
@@ -5890,6 +5885,11 @@ class JarvisUI:
         self._app.setStyle("Fusion")
         self._win = MainWindow(face_path)
         self.root = _RootShim(self._app)
+        # Cette fenêtre ne s'affiche plus jamais (04/11) : l'interface, c'est la galaxie.
+        # Ce fichier reste seulement parce que le moteur de Jarvis passe par lui. Seule exception :
+        # s'il manque la clé Gemini, il faut bien pouvoir la saisir.
+        if self._win._ready:
+            return
         # Jarvis s'ouvre sur l'écran choisi (réglage de l'utilisateur). Réglage "ecran"
         # dans memory/interface.json (un morceau du nom de l'écran) ; sinon l'écran principal.
         _ecran = _ecran_choisi(self._app)
@@ -5905,11 +5905,15 @@ class JarvisUI:
                 QTimer.singleShot(200, self._win.showFullScreen)
                 # (Passer devant la barre des tâches n'a pas marché : l'utilisateur l'a enlevée de cet écran
                 #  dans les réglages de Windows, 28/10. _au_premier_plan reste disponible.)
-        # Écran HUD : tout l'écran dès l'ouverture (demande de l'utilisateur). F11 pour en sortir.
+        # Écran Iron Man : tout l'écran dès l'ouverture (demande de l'utilisateur). F11 pour en sortir.
         elif getattr(self._win, "_minimal", False):
             self._win.showFullScreen()
         else:
             self._win.show()
+
+    def set_muted(self, v: bool):
+        """Coupe ou remet le micro depuis n'importe quel fil (le bouton MICRO de la page)."""
+        self._win._mute_sig.emit(bool(v))
 
     @property
     def muted(self) -> bool:

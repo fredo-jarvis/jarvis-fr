@@ -1,5 +1,5 @@
 """
-Les fichiers que la personne a donnés à Jarvis, retenus d'une séance à l'autre (question de Fredo,
+Les fichiers que la personne a donnés à Jarvis, retenus d'une séance à l'autre (question d'un utilisateur,
 01/11 : « à chaque session je dois lui refournir le fichier, il ne le garde pas en mémoire »).
 
 Tout reste sur ce PC, dans memory/fichiers/ : une copie de chaque fichier (pour le retrouver même

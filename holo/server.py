@@ -42,7 +42,7 @@ def _note(path, n):
         text = open(path, encoding="utf-8", errors="ignore").read()
     except OSError:
         return None
-    # Ajout Jarvis (2026-10-26) : sauter l'en-tête YAML « --- … --- » des pages du cerveau de Fredo
+    # Ajout Jarvis (2026-10-26) : sauter l'en-tête YAML « --- … --- » des pages du cerveau de l'utilisateur
     if text.startswith("---"):
         fin = text.find("\n---", 3)
         if fin != -1:

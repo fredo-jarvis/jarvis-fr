@@ -1,5 +1,5 @@
 """
-Les actualités du briefing de démarrage (demande de Fredo, 01/11 : « l'actu du monde ne m'intéresse
+Les actualités du briefing de démarrage (demande d'un utilisateur, 01/11 : « l'actu du monde ne m'intéresse
 pas, je préfère la locale »).
 
 Réglage "actus" de memory/interface.json :
