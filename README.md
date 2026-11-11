@@ -18,9 +18,9 @@ Une **Galaxie** qui montre ton cerveau en 3D, un tableau de bord **Jarvis OS**, 
 
 *Version française améliorée et non officielle de [**Mark LV**](https://www.youtube.com/@FatihMakes), le Jarvis open source de **FatihMakes**.*
 
-### 📺 [Le tuto vidéo : installer Jarvis pas à pas (4 min)](https://youtu.be/9UM3858yk6A)
+### 📺 [Le tuto vidéo : installer Jarvis 1.1 pas à pas (4 min 30)](https://youtu.be/V6wWoEWyDqM)
 
-[![Regarder le tuto d'installation sur YouTube](docs/miniature-tuto.png)](https://youtu.be/9UM3858yk6A)
+[![Regarder le tuto d'installation sur YouTube](docs/miniature-tuto.png)](https://youtu.be/V6wWoEWyDqM)
 
 </div>
 
