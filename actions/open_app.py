@@ -1,3 +1,5 @@
+import os
+import re
 import time
 import subprocess
 import platform
@@ -77,28 +79,45 @@ def _normalize(raw: str) -> str:
 
     return raw  
 
+# Revue de sécurité du 2026-11-12 : le nom de l'application vient de Gemini, donc peut-être d'un texte lu par Jarvis
+# (page web, mail, PDF) contenant des instructions cachées. Il n'est plus jamais passé à un interpréteur de
+# commandes (shell=True) : un programme est lancé par son chemin, un lien par os.startfile.
+_NOM_SUR = re.compile(r"^[\w .\-+()]{1,80}$")
+_LIEN = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]{1,30}:[^\s\x00-\x1f\x22<>^|`%]*$")
+_LIENS_REFUSES = {"file", "javascript", "vbscript", "data", "ms-msdt", "search-ms", "search", "ms-officecmd"}
+
+
+def _est_un_lien(nom: str) -> bool:
+    return bool(_LIEN.match(nom)) and nom.split(":", 1)[0].lower() not in _LIENS_REFUSES
+
+
 def _launch_windows(app_name: str) -> bool:
 
-    if shutil.which(app_name) or shutil.which(app_name.split(".")[0]):
-        try:
-            subprocess.Popen(
-                app_name,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            time.sleep(1.5)
-            return True
-        except Exception as e:
-            print(f"[open_app] subprocess failed: {e}")
+    if _NOM_SUR.match(app_name):
+        chemin = shutil.which(app_name) or shutil.which(app_name.split(".")[0])
+        if chemin:
+            try:
+                subprocess.Popen(
+                    [chemin],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                time.sleep(1.5)
+                return True
+            except Exception as e:
+                print(f"[open_app] subprocess failed: {e}")
 
     if ":" in app_name:
-        try:
-            subprocess.Popen(f"start {app_name}", shell=True)
-            time.sleep(1.0)
-            return True
-        except Exception:
-            pass
+        if _est_un_lien(app_name):
+            try:
+                os.startfile(app_name)
+                time.sleep(1.0)
+                return True
+            except Exception:
+                pass
+        else:
+            print("[open_app] lien refusé (caractères ou protocole non sûrs)")
+            return False
 
     try:
         import pyautogui
