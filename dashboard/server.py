@@ -18,6 +18,8 @@ import string
 import time
 from pathlib import Path
 
+from dashboard.limite_essais import LimiteEssais
+
 _DEPS_OK = False
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -462,6 +464,7 @@ class DashboardServer:
     def __init__(self):
         self._ip                          = _local_ip()
         self._tokens: set[str]            = set()
+        self._limite                      = LimiteEssais()   # 5 mauvais essais -> bloqué 5 minutes
         self._token_keys: dict[str, str]  = {}   # auth_token → session_key
         self._aes_cache:  dict[str, bytes]= {}   # session_key → AES bytes
         self._clients: set[WebSocket]     = set()
@@ -574,7 +577,12 @@ class DashboardServer:
             body    = await req.json()
             entered = str(body.get("pin", "")).strip().upper()
             now     = time.time()
+            appareil = req.client.host if req.client else "?"
+            if self._limite.bloque(appareil):
+                return JSONResponse({"ok": False, "error": "Too many attempts, try again in a few minutes"},
+                                    status_code=429)
             if entered in self._pending_keys and self._pending_keys[entered] > now:
+                self._limite.reussite(appareil)
                 del self._pending_keys[entered]          # one-time use
                 tok = secrets.token_urlsafe(32)
                 self._tokens.add(tok)
@@ -587,14 +595,19 @@ class DashboardServer:
                 ))
                 # Bearer token in response body — no cookies needed (works on any browser/HTTP)
                 return JSONResponse({"ok": True, "token": tok})
+            self._limite.echec(appareil)
             return JSONResponse({"ok": False, "error": "Invalid or expired key"},
                                 status_code=401)
 
         @app.get("/auto-login")
-        async def auto_login(key: str = ""):
+        async def auto_login(req: Request, key: str = ""):
             """QR code target — validates one-time key, creates session, redirects phone."""
             now = time.time()
+            appareil = req.client.host if req.client else "?"
+            if self._limite.bloque(appareil):
+                return HTMLResponse("Too many attempts, try again in a few minutes", status_code=429)
             if not key or key not in self._pending_keys or self._pending_keys[key] <= now:
+                self._limite.echec(appareil)
                 return HTMLResponse("""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width">
 <style>
@@ -606,6 +619,7 @@ class DashboardServer:
 <p>Press <strong style="color:#dde3ed">Remote Control</strong> in JARVIS to get a new QR code.</p>
 </div></body></html>""")
 
+            self._limite.reussite(appareil)
             del self._pending_keys[key]
             tok     = secrets.token_urlsafe(32)
             dev_tok = secrets.token_urlsafe(32)

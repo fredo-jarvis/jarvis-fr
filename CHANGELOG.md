@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 1.1.1 — Revue de sécurité (12 novembre 2026)
+
+Une revue de sécurité rapide du code (lecture seule, ce n'est pas un audit officiel) a trouvé deux points à renforcer. Ils sont corrigés, avec un test écrit avant chaque correction.
+
+**Sécurité**
+- **Ouvrir une application** : le nom donné par l'assistant n'est plus jamais passé à un interpréteur de commandes. Un programme est lancé par son chemin, un lien par `os.startfile` ; les noms avec caractères spéciaux et les liens dangereux (`file:`, `javascript:`, `ms-msdt:`…) sont refusés.
+- **Télécommande du téléphone** : 5 mauvais essais de clé bloquent l'appareil 5 minutes (page de connexion et lien du QR code).
+- Aucun secret (clé, mot de passe, jeton) n'a été trouvé dans l'historique du dépôt.
+- Pas encore fait : n'ouvrir le port de la télécommande que lorsqu'on la demande.
+
+Pour l'avoir : relance la ligne d'installation (elle ne touche ni à ta clé, ni à ta mémoire, ni à ton cerveau).
+
 ## 1.1 — La Galaxie, Jarvis OS et le cerveau local
 
 **Nouveau**
