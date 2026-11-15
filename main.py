@@ -897,13 +897,29 @@ class JarvisLive:
         raise _ReconnectSignal(keep_context=keep)
 
     def _make_remote_key(self):
-        """Called from Qt main thread when user presses Remote Control."""
+        """Called from Qt main thread when user presses Remote Control.
+        Ouvre le port du tableau de bord à la demande (il ne l'est pas avant),
+        puis génère la clé d'appairage."""
         if self._dashboard is None:
             self.ui.write_log(
                 "SYS: Dashboard unavailable. "
                 "Run: pip install fastapi \"uvicorn[standard]\" cryptography"
             )
             return None
+        if not self._dashboard.is_running():
+            try:
+                ok = asyncio.run_coroutine_threadsafe(
+                    self._dashboard.start(), self._loop
+                ).result(timeout=5)
+            except Exception as e:
+                self.ui.write_log(f"SYS: Impossible de démarrer la télécommande : {e}")
+                return None
+            if not ok:
+                self.ui.write_log(
+                    "SYS: Dashboard unavailable. "
+                    "Run: pip install fastapi \"uvicorn[standard]\" cryptography"
+                )
+                return None
         key    = self._dashboard.new_key()
         url    = self._dashboard.get_url()
         manual = self._dashboard.get_manual_url()
@@ -2609,12 +2625,15 @@ class JarvisLive:
         # for host-API enumeration on the Qt thread.
         audio_devices.prefetch()
 
-        # Start dashboard (optional — needs: pip install fastapi "uvicorn[standard]" cryptography)
+        # Dashboard object (optional — needs: pip install fastapi "uvicorn[standard]" cryptography).
+        # Créé ici, mais aucun port réseau n'est ouvert avant que l'utilisateur
+        # appuie sur "Télécommande" (voir _make_remote_key) — plus de serveur
+        # exposé sur 0.0.0.0 pendant toute la durée de vie de JARVIS pour une
+        # fonctionnalité que personne n'a demandée.
         try:
             from dashboard.server import DashboardServer
             self._dashboard = DashboardServer()
             self._dashboard.set_connect_callback(self._on_phone_connected)
-            asyncio.create_task(self._dashboard.serve())
             # Runs for the whole lifetime, not just inside an active session
             asyncio.create_task(self._process_dashboard_commands())
         except Exception as e:
