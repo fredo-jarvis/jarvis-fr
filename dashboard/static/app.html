@@ -173,6 +173,25 @@
       return fetch(url, opts);
     }
 
+    // Télécharge un fichier via fetch() (qui peut poser l'en-tête Authorization),
+    // plutôt qu'un lien <a href="...?token=..."> qui exposait le jeton dans
+    // l'URL (journaux, historique du navigateur, Referer). Le fichier arrive
+    // en mémoire, puis est proposé via une URL blob: locale et temporaire.
+    async function _telechargerFichier(nom) {
+      try {
+        const resp = await _authFetch(`/uploads/${encodeURIComponent(nom)}`);
+        if (!resp.ok) { toast('Download failed'); return; }
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = nom;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        toast('Download failed');
+      }
+    }
+
     // ── AES-256-CBC encryption (CryptoJS) ────────────────────────────────────
     const _AES_SALT = 'JARVIS-DASHBOARD-v1';
     let _aesKey = null;
@@ -213,10 +232,17 @@
     const wake  = document.getElementById('wake');
 
     const _wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const _wsUrl   = `${_wsProto}://${location.host}/ws?token=${encodeURIComponent(_authToken)}`;
+    // Le jeton n'est plus dans l'URL (un navigateur ne peut pas poser d'en-tête
+    // Authorization sur une connexion WebSocket) : il est envoyé comme premier
+    // message, une fois la connexion ouverte, pour ne pas finir dans les
+    // journaux d'accès ni l'historique du navigateur.
+    const _wsUrl   = `${_wsProto}://${location.host}/ws`;
     const ws       = new WebSocket(_wsUrl);
 
-    ws.onopen    = () => { sys('Remote session active.'); toast('Connected to JARVIS'); };
+    ws.onopen    = () => {
+      ws.send(JSON.stringify({type: 'auth', token: _authToken}));
+      sys('Remote session active.'); toast('Connected to JARVIS');
+    };
     ws.onclose   = () => sys('Connection lost — refresh to reconnect.');
     ws.onerror   = () => sys('Connection error.');
     ws.onmessage = (e) => {
@@ -257,6 +283,14 @@
 
     function esc(s) {
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Comme esc(), mais échappe aussi les guillemets -- nécessaire pour un nom
+    // de fichier placé dans un attribut HTML (data-name="...") : esc() seule
+    // laisserait un nom avec une apostrophe ou un guillemet casser hors de
+    // l'attribut.
+    function escAttr(s) {
+      return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     // ── File helpers ──────────────────────────────────────────────────────────
@@ -350,12 +384,11 @@
         if (xhr.status === 200) {
           let savedName = file.name;
           try { savedName = JSON.parse(xhr.responseText).name || file.name; } catch {}
-          const dlUrl = `/uploads/${encodeURIComponent(savedName)}?token=${encodeURIComponent(_authToken)}`;
           if (bar)  { bar.style.width = '100%'; bar.style.background = 'var(--green)'; }
           if (st)   { st.textContent = '✓'; st.className = 'fc-status done'; }
           if (lbl)  lbl.textContent = 'Sent';
           if (meta) meta.insertAdjacentHTML('beforeend',
-            `<a class="fc-dl" href="${dlUrl}" download="${esc(savedName)}">⬇ Download back</a>`);
+            `<a class="fc-dl" href="#" data-name="${escAttr(savedName)}">⬇ Download back</a>`);
           toast('File sent!');
         } else {
           let errMsg = 'Upload failed';
@@ -380,7 +413,6 @@
 
     // File received by another WebSocket client (e.g., second open tab)
     function _onFileReceived(m) {
-      const dlUrl = `/uploads/${encodeURIComponent(m.name)}?token=${encodeURIComponent(_authToken)}`;
       const card  = document.createElement('div');
       card.className = 'msg-file';
       card.innerHTML = `
@@ -389,7 +421,7 @@
           <div class="fc-lbl">Received</div>
           <div class="fc-name">${esc(m.name)}</div>
           <div class="fc-size">${_fmtSize(m.size)}</div>
-          <a class="fc-dl" href="${dlUrl}" download="${esc(m.name)}">⬇ Download</a>
+          <a class="fc-dl" href="#" data-name="${escAttr(m.name)}">⬇ Download</a>
         </div>
         <div class="fc-status done">✓</div>
       `;
@@ -397,6 +429,15 @@
       feed.scrollTop = feed.scrollHeight;
       toast('File received on computer!');
     }
+
+    // Un seul écouteur sur le flux entier (feed), plutôt qu'un onclick par
+    // lien : marche aussi pour les liens ajoutés dynamiquement ci-dessus.
+    feed.addEventListener('click', (e) => {
+      const lien = e.target.closest('a.fc-dl');
+      if (!lien) return;
+      e.preventDefault();
+      _telechargerFichier(lien.dataset.name);
+    });
 
     // File input change handler
     document.getElementById('file-inp').addEventListener('change', function () {

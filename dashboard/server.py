@@ -551,6 +551,24 @@ class DashboardServer:
             tok = req.headers.get("authorization", "").removeprefix("Bearer ").strip()
             return bool(tok) and tok in self._tokens
 
+        async def _authentifier_ws(websocket: WebSocket, delai: float = 5.0) -> str | None:
+            """Authentifie une connexion WebSocket déjà acceptée, via son
+            PREMIER message plutôt que via un paramètre dans l'URL (qui finit
+            dans les journaux d'accès et l'historique du navigateur).
+            Le client doit envoyer, juste après la connexion :
+                {"type": "auth", "token": "<jeton de session>"}
+            Rend le jeton si valide, sinon ferme la connexion et rend None."""
+            try:
+                premier = await asyncio.wait_for(websocket.receive_json(), timeout=delai)
+            except Exception:
+                await websocket.close(code=4001)
+                return None
+            tok = str(premier.get("token") or "").strip()
+            if premier.get("type") != "auth" or not tok or tok not in self._tokens:
+                await websocket.close(code=4001)
+                return None
+            return tok
+
         # serve CryptoJS from local cache, fallback to CDN redirect
         @app.get("/static/crypto.js")
         async def serve_crypto():
@@ -714,12 +732,16 @@ class DashboardServer:
         # ── Phone mic real-time audio → Gemini Live ──────────────────────────
 
         @app.websocket("/ws/phone-audio")
-        async def phone_audio_ws(websocket: WebSocket, token: str = ""):
-            tok = token.strip()
-            if not tok or tok not in self._tokens:
-                await websocket.close(code=4001)
-                return
+        async def phone_audio_ws(websocket: WebSocket):
+            # Le jeton n'est plus dans l'URL (query string) : le navigateur ne
+            # peut pas ajouter d'en-tête Authorization à une connexion
+            # WebSocket, donc l'authentification se fait "dans le canal" --
+            # le premier message envoyé par le client, juste après la
+            # connexion, au lieu d'un paramètre visible dans les journaux,
+            # l'historique du navigateur ou un éventuel en-tête Referer.
             await websocket.accept()
+            if not await _authentifier_ws(websocket):
+                return
             asyncio.create_task(self.broadcast(
                 {"type": "sys", "text": "Phone microphone live."}
             ))
@@ -816,10 +838,13 @@ class DashboardServer:
             return JSONResponse({"files": files})
 
         @app.get("/uploads/{filename}")
-        async def download_file(filename: str, token: str = ""):
-            # Auth via query param — browser <a download> can't send custom headers
-            tok = token.strip()
-            if not tok or tok not in self._tokens:
+        async def download_file(filename: str, req: Request):
+            # Auth via l'en-tête Authorization, comme les autres routes --
+            # le client récupère le fichier avec fetch() (qui peut poser un
+            # en-tête) puis le propose via une URL blob: locale, au lieu
+            # d'une balise <a href="...?token=..."> qui exposait le jeton
+            # dans l'URL (journaux, historique, Referer).
+            if not _auth(req):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
             safe = re.sub(r'[/\\]', '', filename)
             path = self._uploads_dir / safe
@@ -828,12 +853,11 @@ class DashboardServer:
             return FileResponse(str(path), filename=safe)
 
         @app.websocket("/ws")
-        async def ws_ep(websocket: WebSocket, token: str = ""):
-            tok = token.strip()
-            if not tok or tok not in self._tokens:
-                await websocket.close(code=4001)
-                return
+        async def ws_ep(websocket: WebSocket):
             await websocket.accept()
+            tok = await _authentifier_ws(websocket)
+            if tok is None:
+                return
             self._clients.add(websocket)
             for entry in self._history[-50:]:
                 try:
