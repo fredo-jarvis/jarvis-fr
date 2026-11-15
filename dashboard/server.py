@@ -481,6 +481,13 @@ class DashboardServer:
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
         self.app                          = self._build_app()
+        # Serveurs réseau proprement dits : créés seulement par start(),
+        # jamais à la construction de DashboardServer(). Tant qu'ils sont
+        # None, aucun port n'est ouvert.
+        self._server_main: "uvicorn.Server | None"  = None
+        self._server_alias: "uvicorn.Server | None" = None
+        self._task_main:  asyncio.Task | None        = None
+        self._task_alias: asyncio.Task | None        = None
 
     # ── one-time key management ───────────────────────────────────────────
 
@@ -859,25 +866,25 @@ class DashboardServer:
 
     # ── serve ─────────────────────────────────────────────────────────────
 
-    async def _serve_alias(self) -> None:
-        """Second HTTPS server on PORT+1 sharing the same app and in-memory state.
-        Chrome HTTPS-upgrades any bare IP:PORT the user types, so this port also needs TLS.
-        User types IP:8001 → Chrome tries https → self-signed cert warning → accept once → done."""
-        ssl_key  = BASE_DIR / "config" / "certs" / "jarvis.key"
-        ssl_cert = BASE_DIR / "config" / "certs" / "jarvis.crt"
-        asyncio.get_event_loop().run_in_executor(None, _ensure_network_access, PORT + 1)
-        cfg = uvicorn.Config(
-            self.app, host="0.0.0.0", port=PORT + 1, log_level="warning",
-            ssl_keyfile=str(ssl_key), ssl_certfile=str(ssl_cert),
-        )
-        print(f"[Dashboard] Manual entry:  {self._ip}:{PORT + 1}  (type in browser, accept cert once)")
-        await uvicorn.Server(cfg).serve()
+    def is_running(self) -> bool:
+        return self._server_main is not None
 
-    async def serve(self) -> None:
+    async def start(self) -> bool:
+        """Ouvre le(s) port(s) — seulement maintenant, pas au lancement de
+        JARVIS. N'a aucun effet si déjà démarré (ex. double-clic sur
+        'Télécommande'). Ne rend la main que lorsque le port principal est
+        réellement en écoute, pour qu'un QR code généré juste après soit
+        tout de suite joignable.
+
+        Rend True si le serveur est démarré (ou l'était déjà), False si les
+        dépendances manquent (fastapi/uvicorn)."""
+        if self._server_main is not None:
+            return True
+
         if not _DEPS_OK:
             print("[Dashboard] fastapi/uvicorn not installed — dashboard disabled.")
             print("[Dashboard] Run:  pip install fastapi 'uvicorn[standard]' cryptography")
-            return
+            return False
 
         # Firewall setup runs in a thread — uvicorn starts immediately,
         # no waiting for UAC dialogs or subprocess timeouts.
@@ -890,15 +897,48 @@ class DashboardServer:
         ssl_key  = BASE_DIR / "config" / "certs" / "jarvis.key"
         ssl_cert = BASE_DIR / "config" / "certs" / "jarvis.crt"
 
-        if use_ssl:
-            asyncio.create_task(self._serve_alias())
-
         cfg = uvicorn.Config(
             self.app, host="0.0.0.0", port=PORT, log_level="warning",
             **({"ssl_keyfile": str(ssl_key), "ssl_certfile": str(ssl_cert)} if use_ssl else {}),
         )
+        self._server_main = uvicorn.Server(cfg)
+        self._task_main    = asyncio.create_task(self._server_main.serve())
+
+        if use_ssl:
+            # Second serveur HTTPS sur PORT+1, même app et même état en mémoire.
+            # Chrome passe automatiquement en https:// sur une IP:PORT tapée à
+            # la main, donc ce port a lui aussi besoin de TLS.
+            asyncio.get_event_loop().run_in_executor(None, _ensure_network_access, PORT + 1)
+            cfg_alias = uvicorn.Config(
+                self.app, host="0.0.0.0", port=PORT + 1, log_level="warning",
+                ssl_keyfile=str(ssl_key), ssl_certfile=str(ssl_cert),
+            )
+            self._server_alias = uvicorn.Server(cfg_alias)
+            self._task_alias    = asyncio.create_task(self._server_alias.serve())
+
+        # uvicorn.Server met .started à True une fois le port effectivement
+        # ouvert — on attend ce signal plutôt que de deviner un délai.
+        while not self._server_main.started:
+            await asyncio.sleep(0.02)
 
         proto = "https" if use_ssl else "http"
-        print(f"[Dashboard] {proto}://{self._ip}:{PORT}")
-        print("[Dashboard] Press 'Remote Control' in JARVIS UI to get the QR code.")
-        await uvicorn.Server(cfg).serve()
+        print(f"[Dashboard] {proto}://{self._ip}:{PORT}  (ouvert à la demande)")
+        if use_ssl:
+            print(f"[Dashboard] Manual entry:  {self._ip}:{PORT + 1}  (type in browser, accept cert once)")
+        return True
+
+    async def stop(self) -> None:
+        """Referme le(s) port(s) ouvert(s) par start(). Sans effet si déjà
+        arrêté. N'invalide pas les jetons/sessions en mémoire : un nouveau
+        start() les retrouve tels quels (utile si on rouvre juste après)."""
+        pairs = [(self._server_main, self._task_main),
+                 (self._server_alias, self._task_alias)]
+        for server, _ in pairs:
+            if server is not None:
+                server.should_exit = True
+        for _, task in pairs:
+            if task is not None:
+                await task
+        self._server_main = self._task_main = None
+        self._server_alias = self._task_alias = None
+        print("[Dashboard] Port refermé.")
