@@ -171,6 +171,23 @@ def volume_set(value: int):
             capture_output=True)
         return
 
+def _xrandr_brightness(delta: float) -> None:
+    """Linux sans brightnessctl : ajuste la luminosité avec xrandr, SANS interpréteur de commandes
+    (revue de sécurité 1.1.2 : remplace l'ancienne ligne qui passait par l'interpréteur de commandes).
+    Même résultat qu'avant."""
+    out = subprocess.run(["xrandr", "--verbose"], capture_output=True, text=True).stdout
+    import re as _re
+    m = _re.search(r"^(\S+) connected", out, _re.M)
+    if not m:
+        return
+    name = m.group(1)
+    bloc = out[m.start():]
+    b = _re.search(r"Brightness:\s*([\d.]+)", bloc)
+    current = float(b.group(1)) if b else 1.0
+    new = max(0.1, min(1.0, current + delta))
+    subprocess.run(["xrandr", "--output", name, "--brightness", f"{new:.2f}"], capture_output=True)
+
+
 def brightness_up():
     if _OS == "Darwin":
         subprocess.run(["osascript", "-e",
@@ -181,13 +198,7 @@ def brightness_up():
                 capture_output=True).returncode == 0:
             subprocess.run(["brightnessctl", "set", "+10%"], capture_output=True)
         else:
-            subprocess.run(
-                'xrandr --output $(xrandr | grep " connected" | head -1 | cut -d " " -f1)'
-                ' --brightness $(python3 -c "import subprocess; '
-                'b=float(subprocess.check_output([\"xrandr\",\"--verbose\"]).decode()'
-                '.split(\"Brightness:\")[1].split()[0]); print(min(1.0,b+0.1))")',
-                shell=True, capture_output=True
-            )
+            _xrandr_brightness(+0.1)
     else:
         try:
             subprocess.run(
@@ -210,13 +221,7 @@ def brightness_down():
                 capture_output=True).returncode == 0:
             subprocess.run(["brightnessctl", "set", "10%-"], capture_output=True)
         else:
-            subprocess.run(
-                'xrandr --output $(xrandr | grep " connected" | head -1 | cut -d " " -f1)'
-                ' --brightness $(python3 -c "import subprocess; '
-                'b=float(subprocess.check_output([\"xrandr\",\"--verbose\"]).decode()'
-                '.split(\"Brightness:\")[1].split()[0]); print(max(0.1,b-0.1))")',
-                shell=True, capture_output=True
-            )
+            _xrandr_brightness(-0.1)
     else:
         try:
             subprocess.run(
