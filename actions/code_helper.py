@@ -374,6 +374,14 @@ Explanation:"""
         return f"Could not explain code: {e}"
 
 
+def _avec_confirmation(key: str, title: str, detail: str, run) -> str:
+    """Met l'exécution derrière l'écran de confirmation : rien ne tourne avant le clic CONFIRMER."""
+    from core import confirm as confirm_gate
+    if confirm_gate.pending_title():
+        return "A confirmation is already waiting on screen. Ask the user to answer it first; nothing was done."
+    return confirm_gate.request(key=key, title=title, detail=detail, run=run)
+
+
 def _run_action(file_path, args, timeout, player) -> str:
     if not file_path:
         return "Please provide a file path to run, sir."
@@ -569,11 +577,27 @@ def code_helper(
     elif action == "explain":
         return _explain_action(file_path, code, player)
 
+    # Revue de sécurité 1.1.2 : lancer un programme (écrit par l'IA ou non) exige la confirmation
+    # de l'utilisateur sur l'écran (core/confirm.py) — le modèle ne peut pas la donner à sa place.
     elif action == "run":
-        return _run_action(file_path, args, timeout, player)
+        if not file_path or not Path(file_path).exists():
+            return _run_action(file_path, args, timeout, player)   # message d'erreur habituel
+        return _avec_confirmation(
+            f"run:{file_path}",
+            f"Exécuter le programme « {Path(file_path).name} »",
+            f"Fichier : {file_path}\nArguments : {' '.join(args or []) or 'aucun'}",
+            lambda: _run_action(file_path, args, timeout, player),
+        )
 
     elif action == "build":
-        return _build(description, language, output_path, args, timeout, speak, player)
+        if not description:
+            return "Please describe what you want me to build, sir."
+        return _avec_confirmation(
+            f"build:{description[:40]}",
+            "Écrire puis EXÉCUTER un nouveau programme",
+            f"Programme demandé : {description[:200]}\nLangage : {language or 'python'}",
+            lambda: _build(description, language, output_path, args, timeout, speak, player),
+        )
 
     elif action == "optimize":
         return _optimize_action(file_path, code, language, output_path, player)

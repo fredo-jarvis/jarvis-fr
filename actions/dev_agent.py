@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import sys
 import json
@@ -275,16 +276,24 @@ def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
         return f"Install error (non-fatal): {e}"
 
 def _open_vscode(project_dir: Path) -> bool:
+    # Revue de sécurité 1.1.2 : plus de shell=True. Le chemin du projet est vérifié
+    # (aucun caractère spécial de l'invite de commandes), puis VS Code est lancé par son chemin.
+    if re.search(r'[&|<>^%"!`\n\r]', str(project_dir)):
+        print(f"[DevAgent] ⛔ Chemin de projet refusé pour VS Code : {project_dir}")
+        return False
     vscode_candidates = [
-        "code",
+        shutil.which("code"),
+        rf"C:\Users\{Path.home().name}\AppData\Local\Programs\Microsoft VS Code\Code.exe",
+        r"C:\Program Files\Microsoft VS Code\Code.exe",
         rf"C:\Users\{Path.home().name}\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd",
         r"C:\Program Files\Microsoft VS Code\bin\code.cmd",
     ]
     for cmd in vscode_candidates:
+        if not cmd or not Path(cmd).exists():
+            continue
         try:
             subprocess.Popen(
                 [cmd, str(project_dir)],
-                shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
@@ -298,9 +307,9 @@ def _open_vscode(project_dir: Path) -> bool:
 def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
     print(f"[DevAgent] 🚀 Running: {run_command}")
     try:
-        parts = run_command.split()
-        if parts[0].lower() == "python":
-            parts[0] = sys.executable
+        parts = _safe_run_command(run_command, project_dir)
+        if parts is None:
+            return "Run refused: the launch command is not a simple 'python/node <project file>'."
 
         result = subprocess.run(
             parts,
@@ -328,8 +337,10 @@ def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
     except Exception as e:
         return f"Run error: {e}"
 
-def _try_auto_install(error_output: str, project_dir: Path) -> bool:
-    """If there is a ModuleNotFoundError, tries to auto-install the missing package."""
+def _try_auto_install(error_output: str, project_dir: Path, allowed=None) -> bool:
+    """If there is a ModuleNotFoundError, installs the missing package — ONLY if it was in the
+    approved dependency list. A package name guessed from an error message is never installed:
+    look-alike malicious packages exist on PyPI (typosquatting)."""
     pattern = re.compile(
         r"No module named ['\"]([a-zA-Z0-9_\-\.]+)['\"]", re.IGNORECASE
     )
@@ -338,6 +349,10 @@ def _try_auto_install(error_output: str, project_dir: Path) -> bool:
         return False
 
     pkg = match.group(1).replace("_", "-").split(".")[0]
+    approuves = {re.split(r"[\[<>=!~]", d)[0].strip().lower().replace("_", "-") for d in (allowed or [])}
+    if pkg.lower() not in approuves:
+        print(f"[DevAgent] ⛔ '{pkg}' manque mais n'était pas dans les bibliothèques approuvées : pas d'installation automatique.")
+        return False
     print(f"[DevAgent] 🔧 Auto-installing missing package: {pkg}")
     try:
         result = subprocess.run(
@@ -439,6 +454,42 @@ Fixed code for {fix_path}:"""
 
     return updated_codes
 
+# ── Revue de sécurité 1.1.2 ──────────────────────────────────────────────────
+# Le plan (fichiers, dépendances, commande de lancement) est écrit par Gemini, donc
+# potentiellement influencé par un texte piégé. On le VÉRIFIE, puis on le montre à
+# l'utilisateur sur l'écran de confirmation (core/confirm.py) AVANT toute exécution.
+_DEP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,60}(\[[A-Za-z0-9,_\-]{1,40}\])?([<>=!~]=?[0-9][A-Za-z0-9.*+!\-]{0,30})?$")
+_RUNNERS = {"python": "python", "python3": "python", "py": "python", "node": "node"}
+
+
+def _safe_run_command(run_command: str, project_dir: Path) -> list[str] | None:
+    """Accepte seulement « python <fichier du projet> [args simples] » ou « node <fichier du projet> ».
+    Retourne la commande prête à lancer (sans interpréteur de commandes), ou None si elle est refusée."""
+    parts = (run_command or "").split()
+    if len(parts) < 2 or parts[0].lower() not in _RUNNERS:
+        return None
+    script = (project_dir / parts[1]).resolve()
+    try:
+        script.relative_to(project_dir.resolve())          # pas de ../ hors du projet
+    except ValueError:
+        return None
+    if script.suffix.lower() not in {".py", ".js", ".mjs"}:
+        return None
+    if any(not re.fullmatch(r"[\w.\-=/:]{1,60}", a) for a in parts[2:]):
+        return None
+    runner = sys.executable if _RUNNERS[parts[0].lower()] == "python" else "node"
+    return [runner, str(script)] + parts[2:]
+
+
+def _safe_dependencies(deps) -> tuple[list[str], list[str]]:
+    """Sépare les noms de paquets valides des noms suspects (options pip, URL, chemins…)."""
+    ok, refuses = [], []
+    for d in deps if isinstance(deps, list) else []:
+        d = str(d).strip()
+        (ok if _DEP_RE.fullmatch(d) else refuses).append(d)
+    return ok, refuses
+
+
 def _build_project(
     description: str,
     language: str,
@@ -447,6 +498,7 @@ def _build_project(
     speak=None,
     player=None,
 ) -> str:
+    """Étape 1 : planifier (aucune exécution), puis demander la confirmation à l'écran."""
 
     def log(msg: str):
         print(f"[DevAgent] {msg}")
@@ -466,15 +518,48 @@ def _build_project(
         return msg
 
     proj_name    = project_name or plan.get("project_name", "jarvis_project")
-    proj_name    = re.sub(r"[^\w\-]", "_", proj_name)
+    proj_name    = re.sub(r"[^\w\-]", "_", proj_name)[:60] or "jarvis_project"
     project_dir  = PROJECTS_DIR / proj_name
-    project_dir.mkdir(parents=True, exist_ok=True)
 
     files        = plan.get("files", [])
     entry_point  = plan.get("entry_point", "main.py")
     run_command  = plan.get("run_command", f"python {entry_point}")
-    dependencies = plan.get("dependencies", [])
+    dependencies, deps_refuses = _safe_dependencies(plan.get("dependencies", []))
 
+    if deps_refuses:
+        log(f"Dépendances refusées (noms suspects) : {deps_refuses}")
+    if _safe_run_command(run_command, project_dir) is None:
+        msg = (f"I refused to run this project: its launch command '{run_command[:80]}' is not a simple "
+               f"'python <file>' or 'node <file>' inside the project folder. Nothing was executed.")
+        log(msg)
+        return msg
+
+    from core import confirm as confirm_gate
+    if confirm_gate.pending_title():
+        return "A confirmation is already waiting on screen. Ask the user to answer it first; nothing was done."
+
+    detail = (f"Dossier : {project_dir}\n"
+              f"Fichiers : {len(files)} · Lancement : {run_command}\n"
+              f"Bibliothèques à installer : {', '.join(dependencies) if dependencies else 'aucune'}")
+    return confirm_gate.request(
+        key=f"dev_agent:{proj_name}",
+        title=f"Créer et EXÉCUTER le projet « {proj_name} »",
+        detail=detail,
+        run=lambda: _execute_project(description, language, proj_name, project_dir, files, entry_point,
+                                     run_command, dependencies, timeout, speak, player),
+    )
+
+
+def _execute_project(description, language, proj_name, project_dir, files, entry_point,
+                     run_command, dependencies, timeout, speak=None, player=None) -> str:
+    """Étape 2 (seulement après le clic CONFIRMER) : écrire, installer, lancer, corriger."""
+
+    def log(msg: str):
+        print(f"[DevAgent] {msg}")
+        if player:
+            player.write_log(f"[DevAgent] {msg}")
+
+    project_dir.mkdir(parents=True, exist_ok=True)
     log(f"Project: {proj_name} | Files: {len(files)} | Entry: {entry_point}")
 
     def _dep_sort_key(fi: dict) -> int:
@@ -546,7 +631,8 @@ def _build_project(
 
         error_type = _classify_error(last_output)
         if error_type == "dependency_error" and auto_installs < 3:
-            installed = _try_auto_install(last_output, project_dir)
+            # Seulement une bibliothèque déjà approuvée dans le plan (jamais un nom deviné)
+            installed = _try_auto_install(last_output, project_dir, allowed=dependencies)
             if installed:
                 auto_installs += 1
                 log("Missing dependency installed, retrying...")

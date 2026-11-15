@@ -188,8 +188,10 @@ def _ensure_network_access(port: int) -> None:
 
         # ── Try running directly (succeeds when already admin) ────────────────
         try:
+            # Revue de sécurité 1.1.2 : plus de shell=True — le fichier .bat (écrit par Jarvis
+            # juste au-dessus, dans un dossier temporaire) est lancé explicitement par cmd.exe.
             r = subprocess.run(
-                [bat_path], capture_output=True, timeout=8, shell=True
+                ["cmd.exe", "/c", bat_path], capture_output=True, timeout=8
             )
             if r.returncode == 0:
                 print(f"[Dashboard] Firewall configured for port {port}.")

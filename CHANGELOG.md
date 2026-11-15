@@ -1,5 +1,21 @@
 # Journal des versions
 
+## 1.1.2 — Plus aucun code généré exécuté (15 novembre 2026)
+
+Un membre de la communauté a signalé une faille sérieuse : l'action « tâche libre » du bureau faisait **écrire du Python par Gemini puis l'exécutait** sur la machine, dans un « bac à sable » du même processus. Ce bac à sable se contournait en une ligne, et une page web ou un mail piégé lu par Jarvis pouvait détourner le modèle. Merci à lui pour ce signalement précis et bienveillant.
+
+**Sécurité**
+- **Bureau** : plus aucun code écrit par l'IA n'est exécuté. Les tâches libres passent par les outils nommés qui existaient déjà (souris et clavier, fichiers, applications, réglages), dont les arguments sont vérifiés. Fond d'écran, rangement, nettoyage, liste et statistiques du bureau fonctionnent comme avant.
+- **Agent développeur et assistant de code** : rien n'est lancé avant ta **confirmation à l'écran** (le bouton CONFIRMER, que l'IA ne peut pas actionner à ta place). L'écran indique le projet, la commande de lancement et les bibliothèques qui seront installées.
+- La commande de lancement d'un projet doit être un simple `python <fichier du projet>` ou `node <fichier du projet>` ; tout le reste est refusé.
+- Les noms de bibliothèques suspects (options pip, liens, chemins) sont refusés, et **aucune bibliothèque devinée** à partir d'un message d'erreur n'est installée automatiquement (protection contre les paquets pièges).
+- **Plus aucun `shell=True`** : ouverture de VS Code, luminosité sous Linux et réglage du pare-feu du tableau de bord passent désormais sans interpréteur de commandes.
+- Nouveau test : `tests/test_securite_1_1_2.py` (14 vérifications).
+
+Ce qui change pour toi : un clic sur CONFIRMER avant que Jarvis construise ou lance un programme. Tout le reste est identique.
+
+Pour l'avoir : relance la ligne d'installation (elle ne touche ni à ta clé, ni à ta mémoire, ni à ton cerveau).
+
 ## 1.1.1 — Revue de sécurité (12 novembre 2026)
 
 Une revue de sécurité rapide du code (lecture seule, ce n'est pas un audit officiel) a trouvé deux points à renforcer. Ils sont corrigés, avec un test écrit avant chaque correction.
