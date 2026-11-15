@@ -123,6 +123,7 @@ from core                      import undo as undo_stack
 from core                      import confirm as confirm_gate
 from core                      import audio_devices
 from core.action_loader        import discover_actions
+from core                      import garde_externe
 from core.echo                 import EchoGuard
 from core.viseme               import VisemeStream
 from core.wake_word            import (
@@ -1484,6 +1485,47 @@ class JarvisLive:
 
         return out
 
+    def _garde_externe(self, name: str, args: dict):
+        """Renvoie la phrase pour le modèle si l'outil doit d'abord être confirmé à l'écran, sinon None.
+
+        Le clic CONFIRMER vient de l'interface (core/confirm.py) : le modèle ne peut pas le donner,
+        même si un mail ou une page lui demande de le faire."""
+        from core import confirm as _confirm
+        if name in garde_externe.VISION and not garde_externe.vision_autorisee():
+            if _confirm.pending_title():
+                return "A confirmation is already waiting on screen. Ask the user to answer it first; nothing was captured."
+            camera = str(args.get("angle", "")).lower() == "camera"
+            msg = _confirm.request(
+                key="vision",
+                title="ALLUMER LA CAMÉRA" if camera else "REGARDER TON ÉCRAN",
+                detail=("Jarvis veut envoyer une image de ta caméra à Gemini (Google) pour l'analyser."
+                        if camera else
+                        "Jarvis veut envoyer une capture de ton écran à Gemini (Google) pour l'analyser. "
+                        "Vérifie qu'aucune information privée n'est affichée."),
+                run=garde_externe.accorder_vision,
+            )
+            return msg + f" Once the user has confirmed, call {name} again."
+        if garde_externe.doit_confirmer(name):
+            if _confirm.pending_title():
+                return "A confirmation is already waiting on screen. Ask the user to answer it first; nothing was done."
+            if self._action_registry.has(name):
+                _ctx = {"player": self.ui, "speak": self.speak, "response": None, "session_memory": None}
+                run = lambda: self._action_registry.run(name, args, _ctx)
+            elif self._plugin_registry.has(name):
+                run = lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=None)
+            else:
+                return None
+            detail = json.dumps(args, ensure_ascii=False)[:300]
+            return _confirm.request(
+                key=f"apres-lecture-{name}",
+                title=f"ACTION APRÈS LECTURE : {name}",
+                detail=("Jarvis vient de lire un contenu extérieur (mail, page web, fichier ou écran) "
+                        f"et veut maintenant faire : {name} {detail}. "
+                        "Confirme seulement si c'est bien TOI qui l'as demandé."),
+                run=run,
+            )
+        return None
+
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         name = fc.name
         args = dict(fc.args or {})
@@ -1522,8 +1564,13 @@ class JarvisLive:
         loop   = asyncio.get_event_loop()
         result = "Done."
 
+        _bloque = None
         try:
-            if name == "recall_memory":
+            # 1.1.3 : confirmation à l'écran pour la vision et pour les actions après une lecture extérieure
+            _bloque = self._garde_externe(name, args)
+            if _bloque is not None:
+                result = _bloque
+            elif name == "recall_memory":
                 # Local file search: no network, no second model. Kept out of
                 # the executor deliberately — it is a dictionary scan over a few
                 # hundred short strings, and a thread hop would cost more than
@@ -1676,6 +1723,12 @@ class JarvisLive:
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
             self.speak_error(name, e)
+
+        # 1.1.3 : un contenu extérieur (mail, page, fichier, écran) est une DONNÉE, jamais un ordre
+        if _bloque is None and name in garde_externe.EXTERNES:
+            garde_externe.marquer_externe()
+            if name != "screen_process":
+                result = garde_externe.envelopper(result, name)
 
         if not self.ui.muted:
             self.ui.set_state("LISTENING")

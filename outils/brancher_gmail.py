@@ -1,7 +1,7 @@
 """Branche Gmail à Jarvis (lecture seule). Lancé par Brancher-Gmail.bat.
 
 Demande l'adresse Gmail et un mot de passe d'application Google, vérifie qu'ils marchent,
-puis les garde dans config/api_keys.json (ce fichier n'est jamais partagé).
+puis les garde dans config/api_keys.json — le mot de passe chiffré par Windows, jamais en clair.
 """
 import getpass
 import imaplib
@@ -36,8 +36,21 @@ try:
 except Exception:
     cfg = {}
 cfg["gmail_adresse"] = adresse
-cfg["gmail_mot_de_passe_app"] = mdp
+# 1.1.3 : le mot de passe d'application n'est plus jamais écrit en clair (chiffré par Windows)
+import sys
+sys.path.insert(0, str(CONFIG.parent.parent))
+from core import coffre
+chiffre = coffre.chiffrer(mdp)
+cfg.pop("gmail_mot_de_passe_app", None)
+if chiffre:
+    cfg["gmail_mot_de_passe_app_chiffre"] = chiffre
+else:
+    cfg["gmail_mot_de_passe_app"] = mdp      # hors Windows : fichier réservé à ton compte (ci-dessous)
 CONFIG.parent.mkdir(parents=True, exist_ok=True)
 CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+try:
+    CONFIG.chmod(0o600)
+except Exception:
+    pass
 print("\nC'est branché ! Relance Jarvis et demande-lui : « j'ai des nouveaux mails ? »")
 input("\nAppuie sur Entrée pour fermer.")

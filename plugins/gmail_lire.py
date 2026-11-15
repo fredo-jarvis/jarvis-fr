@@ -6,7 +6,7 @@ Plugin : lire sa boîte Gmail à la voix (lecture seule).
 
 Branchement (une seule fois) : double-cliquer sur Brancher-Gmail.bat, qui demande l'adresse
 Gmail et un « mot de passe d'application » Google (pas le vrai mot de passe), et les garde
-dans config/api_keys.json (jamais partagé). Jarvis ne peut ni envoyer, ni effacer, ni déplacer
+dans config/api_keys.json, chiffré par Windows (jamais en clair, jamais partagé). Jarvis ne peut ni envoyer, ni effacer, ni déplacer
 un mail : il lit seulement.
 """
 import email
@@ -55,12 +55,34 @@ def _texte(v) -> str:
         return v or ""
 
 
+def _mot_de_passe(cfg: dict) -> str | None:
+    """Le mot de passe d'application, gardé chiffré par Windows (1.1.3).
+
+    Une ancienne installation l'avait écrit en clair : il est chiffré à la première lecture
+    et la version en clair est effacée du fichier."""
+    from core import coffre
+    chiffre = cfg.get("gmail_mot_de_passe_app_chiffre")
+    if chiffre:
+        return coffre.dechiffrer(chiffre)
+    clair = cfg.get("gmail_mot_de_passe_app")
+    if clair:
+        nouveau = coffre.chiffrer(clair)
+        if nouveau:
+            cfg["gmail_mot_de_passe_app_chiffre"] = nouveau
+            del cfg["gmail_mot_de_passe_app"]
+            try:
+                CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
+    return clair
+
+
 def _connexion():
     try:
         cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     except Exception:
         cfg = {}
-    adresse, mdp = cfg.get("gmail_adresse"), cfg.get("gmail_mot_de_passe_app")
+    adresse, mdp = cfg.get("gmail_adresse"), _mot_de_passe(cfg)
     if not adresse or not mdp:
         return None
     m = imaplib.IMAP4_SSL("imap.gmail.com", timeout=20)

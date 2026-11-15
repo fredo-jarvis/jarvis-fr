@@ -1,5 +1,20 @@
 # Journal des versions
 
+## 1.1.3 — Mails, écran et injection de prompt (15 novembre 2026)
+
+Un membre de la communauté a signalé trois points précis. Ils étaient fondés : les voici corrigés, avec des tests.
+
+**Sécurité**
+- **Gmail** : le mot de passe d'application n'est plus jamais écrit en clair. Il est chiffré par Windows (la même protection que les mots de passe enregistrés de Windows) : copié ailleurs, le fichier ne révèle rien. Si tu avais déjà branché Gmail, il est chiffré automatiquement à la première lecture de tes mails et la version en clair est effacée. Rappel : ce n'est jamais ton vrai mot de passe Google, et tu peux l'annuler à tout moment sur myaccount.google.com/apppasswords.
+- **Écran et caméra** : plus aucune image ne part vers Gemini sans ton accord. Quand tu demandes « regarde mon écran », Jarvis affiche **REGARDER TON ÉCRAN** avec le bouton CONFIRMER ; l'accord vaut 3 minutes pour enchaîner les questions. Même chose pour « montre-moi où cliquer » et la caméra.
+- **Injection de prompt** : un mail, une page web, un fichier ou l'écran sont maintenant donnés à l'IA **comme des données entre balises, jamais comme des ordres** (un mail ne peut pas fermer la balise pour s'en échapper), et les consignes de Jarvis le rappellent.
+- Pendant 5 minutes après une de ces lectures, toute action qui agit sur le PC ou envoie quelque chose (ouvrir une application, souris et clavier, fichiers, messages, navigateur, réglages, notes du cerveau…) attend ton clic sur **CONFIRMER**. Si c'est bien toi qui l'as demandée, un clic suffit ; si c'est un mail piégé, rien ne se passe.
+- Nouveau test : `tests/test_securite_1_1_3.py` (14 vérifications, dont un mail piégé qui demande d'ouvrir une application : rien n'est lancé).
+
+Ce qui change pour toi : un clic sur CONFIRMER avant que Jarvis regarde ton écran, et avant une action juste après avoir lu un mail ou une page. Tout le reste est identique.
+
+Pour l'avoir : relance la ligne d'installation (elle ne touche ni à ta clé, ni à ta mémoire, ni à ton cerveau).
+
 ## 1.1.2 — Plus aucun code généré exécuté (15 novembre 2026)
 
 Un membre de la communauté a signalé une faille sérieuse : l'action « tâche libre » du bureau faisait **écrire du Python par Gemini puis l'exécutait** sur la machine, dans un « bac à sable » du même processus. Ce bac à sable se contournait en une ligne, et une page web ou un mail piégé lu par Jarvis pouvait détourner le modèle. Merci à lui pour ce signalement précis et bienveillant.
