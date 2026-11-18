@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Jarvis FR
+GenericName=Assistant vocal
+Comment=Assistant vocal Jarvis FR
+Exec="@DEPOT@/jarvis.sh"
+Path=@DEPOT@
+Icon=@ICONE@
+Terminal=false
+Categories=Utility;
+Keywords=assistant;voix;jarvis;
+StartupNotify=false
+X-Jarvis-FR-Installateur=true

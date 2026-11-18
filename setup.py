@@ -105,12 +105,14 @@ def main() -> None:
             )
     elif OS == "Linux":
         print(
-            "\nℹ️  Linux note — a few voice-controlled OS actions shell out to "
-            "native tools. Install the ones you'll use via your package manager:\n"
-            "    • volume      → pulseaudio-utils   (pactl)\n"
+            "\nℹ️  Linux note — Ubuntu / GNOME Wayland: use ./install.sh instead of this script "
+            "(it excludes the obsolete python3-xlib that pyautogui would pull in). "
+            "OS actions shell out to native tools:\n"
+            "    • volume      → wireplumber        (wpctl)\n"
             "    • brightness  → brightnessctl\n"
-            "    • reminders   → systemd (systemd-run) or 'at'\n"
-            "    • open URLs   → xdg-utils          (xdg-open)"
+            "    • reminders   → systemd-run + libnotify-bin (notify-send)\n"
+            "    • open URLs   → xdg-utils          (xdg-open)\n"
+            "    See README_LINUX.md."
         )
     elif OS == "Darwin":
         print(
