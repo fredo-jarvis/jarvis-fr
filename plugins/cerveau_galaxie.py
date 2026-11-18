@@ -12,7 +12,7 @@ from pathlib import Path
 
 SERVEUR = Path(__file__).resolve().parent.parent / "galaxie" / "server.py"
 PORT = 4719
-CREATE_NO_WINDOW = 0x08000000
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # 0x08000000 sous Windows, 0 ailleurs (creationflags y est refusé)
 
 PLUGIN = {
     "name": "cerveau_galaxie",

@@ -63,6 +63,30 @@ class Pont:
                 "confirmation": self.confirmation if self.confirm.pending_title() else None,
                 "muet": bool(getattr(self.ui, "muted", False))}
 
+    def peripheriques(self) -> dict:
+        """Micros et sorties utilisables, avec le choix enregistré ('' = celui du système)."""
+        from core import audio_devices
+        from memory.config_manager import get_input_device, get_output_device
+        return {"entrees": audio_devices.list_devices("input"), "sorties": audio_devices.list_devices("output"),
+                "entree": get_input_device(), "sortie": get_output_device()}
+
+    def choisir_peripheriques(self, entree: str, sortie: str):
+        """Même effet que le tiroir Qt : on enregistre, et la session se rouvre seulement si le choix a changé."""
+        from core import audio_devices
+        from memory.config_manager import (get_input_device, get_output_device,
+                                           save_input_device, save_output_device)
+        entree, sortie = (entree or "").strip(), (sortie or "").strip()
+        if entree and entree not in audio_devices.list_devices("input"):
+            raise ValueError("Ce micro n'existe pas.")
+        if sortie and sortie not in audio_devices.list_devices("output"):
+            raise ValueError("Cette sortie n'existe pas.")
+        change = (entree != get_input_device()) or (sortie != get_output_device())
+        save_input_device(entree)
+        save_output_device(sortie)
+        if change:
+            self.noter("SYS: Périphériques audio mis à jour.")
+            self.jarvis._on_audio_device_change()
+
     def commande(self, texte: str):
         texte = (texte or "").strip()
         if not texte:

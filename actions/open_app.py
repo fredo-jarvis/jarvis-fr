@@ -3,6 +3,7 @@ import re
 import time
 import subprocess
 import platform
+import shlex
 import shutil
 
 try:
@@ -192,58 +193,83 @@ _LINUX_TERMINAL_FALLBACKS = [
     "xterm", "lxterminal", "mate-terminal", "tilix", "alacritty", "kitty",
 ]
 
+# Noms français ou génériques → identifiants .desktop GNOME ; plusieurs candidats selon la distribution.
+_LINUX_EQUIVALENTS = {
+    "gedit": ["org.gnome.TextEditor", "org.gnome.gedit"],
+    "gnome-text-editor": ["org.gnome.TextEditor"],
+    "bloc-notes": ["org.gnome.TextEditor", "org.gnome.gedit"],
+    "editeur de texte": ["org.gnome.TextEditor", "org.gnome.gedit"],
+    "calculatrice": ["org.gnome.Calculator"],
+    "fichiers": ["org.gnome.Nautilus"],
+    "explorateur": ["org.gnome.Nautilus"],
+    "gestionnaire de fichiers": ["org.gnome.Nautilus"],
+    "parametres": ["org.gnome.Settings"],
+    "reglages": ["org.gnome.Settings"],
+    "gnome-system-monitor": ["gnome-system-monitor", "org.gnome.SystemMonitor", "org.gnome.Usage"],
+    "moniteur systeme": ["gnome-system-monitor", "org.gnome.SystemMonitor", "org.gnome.Usage"],
+}
+
+
+def _lancer_commande(commande: str) -> bool:
+    """Lance un binaire du PATH (avec ses éventuels arguments), détaché de Jarvis."""
+    try:
+        argv = shlex.split(commande)
+    except ValueError:
+        return False
+    binary = argv and shutil.which(argv[0])
+    if not binary:
+        return False
+    try:
+        subprocess.Popen([binary, *argv[1:]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+        time.sleep(1.0)
+        return True
+    except Exception:
+        return False
+
+
 def _launch_linux(app_name: str) -> bool:
+    from core import apps_linux
 
     # terminal emulators: try common ones in order
     if app_name in ("x-terminal-emulator", "gnome-terminal", "terminal"):
         for term in _LINUX_TERMINAL_FALLBACKS:
             if shutil.which(term):
                 try:
-                    subprocess.Popen([term], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen([term], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
                     time.sleep(1.0)
                     return True
                 except Exception:
                     continue
 
-    binary = (
-        shutil.which(app_name) or
-        shutil.which(app_name.lower()) or
-        shutil.which(app_name.lower().replace(" ", "-")) or
-        shutil.which(app_name.lower().replace(" ", "_"))
-    )
-    if binary:
-        try:
-            subprocess.Popen(
-                [binary],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+    # 1) commande du PATH (« libreoffice --writer » accepté)
+    for cand in (app_name, app_name.lower(), app_name.lower().replace(" ", "-"), app_name.lower().replace(" ", "_")):
+        if _lancer_commande(cand):
+            return True
+
+    # 2) application connue des fichiers .desktop (nom, identifiant ou commande), équivalents français inclus
+    apps = apps_linux.lister()
+    cle = apps_linux._norm(app_name)
+    for nom in [app_name, *_LINUX_EQUIVALENTS.get(cle, [])]:
+        app = apps_linux.trouver(nom, apps)
+        if app and apps_linux.lancer_desktop(app["path"]):
             time.sleep(1.0)
             return True
-        except Exception:
-            pass
 
-    try:
-        subprocess.run(
-            ["xdg-open", app_name],
-            capture_output=True, timeout=5
-        )
-        return True
-    except Exception:
-        pass
+    # 3) gtk-launch avec un identifiant .desktop
+    if shutil.which("gtk-launch"):
+        for desktop_name in [app_name.lower(), app_name.lower().replace(" ", "-"), app_name.lower().replace(" ", "")]:
+            try:
+                if subprocess.run(["gtk-launch", desktop_name], capture_output=True, timeout=5).returncode == 0:
+                    return True
+            except Exception:
+                pass
 
-    for desktop_name in [
-        app_name.lower(),
-        app_name.lower().replace(" ", "-"),
-        app_name.lower().replace(" ", ""),
-    ]:
+    # 4) xdg-open seulement pour un lien ou un chemin existant : sur un simple nom il « réussit » à tort
+    if (_est_un_lien(app_name) or os.path.exists(app_name)) and shutil.which("xdg-open"):
         try:
-            result = subprocess.run(
-                ["gtk-launch", desktop_name],
-                capture_output=True, timeout=5
-            )
-            if result.returncode == 0:
-                return True
+            return subprocess.run(["xdg-open", app_name], capture_output=True, timeout=5).returncode == 0
         except Exception:
             pass
 

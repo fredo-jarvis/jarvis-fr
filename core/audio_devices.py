@@ -178,8 +178,13 @@ def _display_name(name: str, devices) -> str:
     carries the audio may not be the one that can spell. If another host API
     knows a longer name that starts with this one, show that instead — the user
     reads 'Realtek HD Audio 2nd output (Realtek(R) Audio)' while the stream runs
-    on the endpoint called 'Realtek HD Audio 2nd output (Re'."""
-    if len(name) < 30:
+    on the endpoint called 'Realtek HD Audio 2nd output (Re'.
+
+    Windows only: on PulseAudio/PipeWire nothing is truncated, and a sink name
+    is a prefix of its own '.monitor' source, so the loop below would show the
+    speakers under the name of a capture endpoint."""
+    import platform
+    if len(name) < 30 or platform.system() != "Windows":
         return name
     best = name
     for dev in devices:
@@ -282,6 +287,10 @@ def _query() -> dict[str, list[str]]:
                 if not name or _is_pseudo(name) or name in seen:
                     continue
                 if dev.get(chan, 0) <= 0:
+                    continue
+                # PulseAudio/PipeWire expose every output as a capture source too (what the
+                # speakers play). Picking one as a microphone would make JARVIS hear itself.
+                if kind == "input" and name.endswith(".monitor"):
                     continue
                 if api_filter is not None:
                     api = apis[dev["hostapi"]].lower() if dev.get("hostapi", -1) < len(apis) else ""

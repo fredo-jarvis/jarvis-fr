@@ -10,6 +10,7 @@ aucune page extérieure : la galaxie s'affiche sans Internet.
 import ctypes
 import json
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -246,6 +247,11 @@ class Page(BaseHTTPRequestHandler):
             except ValueError:
                 depuis = 0
             self._json(200, PONT.photo(depuis))
+        elif url.path == "/api/jarvis/audio":
+            if PONT is None:
+                self._json(409, {"erreur": "Jarvis n'est pas lancé."})
+                return
+            self._json(200, PONT.peripheriques())
         elif url.path == "/api/jarvis/son":
             if PONT is None:
                 self._json(409, {"erreur": "Jarvis n'est pas lancé."})
@@ -333,6 +339,9 @@ class Page(BaseHTTPRequestHandler):
             elif self.path == "/api/jarvis/couper":
                 PONT.couper()
                 self._json(200, {"ok": True})
+            elif self.path == "/api/jarvis/audio":
+                PONT.choisir_peripheriques(str(d.get("entree", "")), str(d.get("sortie", "")))
+                self._json(200, {"ok": True})
             elif self.path == "/api/jarvis/hologramme":
                 PONT.hologramme()
                 self._json(200, {"ok": True})
@@ -370,10 +379,50 @@ def arguments_chrome() -> str:
     return f'--app={ADRESSE} "--user-data-dir={profil}" --no-first-run --start-maximized'
 
 
+FENETRE = None             # hors Windows : le processus Chrome qui porte la fenêtre de la galaxie
+
+
+def chrome_posix() -> str | None:
+    for nom in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        chemin = shutil.which(nom)
+        if chemin:
+            return chemin
+    return None
+
+
+def ouvrir_fenetre_posix() -> bool:
+    """Linux et macOS : même fenêtre « application » que sous Windows, avec son profil à part.
+    Sans Chrome ni Chromium, la page s'ouvre dans le navigateur par défaut et rend faux."""
+    global FENETRE
+    exe = chrome_posix()
+    if exe is None:
+        webbrowser.open(ADRESSE)
+        return False
+    profil = ICI / ".fenetre-chrome"
+    FENETRE = subprocess.Popen([exe, f"--app={ADRESSE}", f"--user-data-dir={profil}", "--no-first-run",
+                                "--start-maximized"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def attendre_fenetre_posix() -> bool:
+    """Attend la fermeture de la fenêtre. Rend faux si Chrome est reparti tout de suite : il a alors passé la main
+    à une fenêtre déjà ouverte avec ce profil, et ce n'est pas l'utilisateur qui a fermé la galaxie."""
+    debut = time.time()
+    FENETRE.wait()
+    return time.time() - debut > 10
+
+
+def fermer_fenetre_posix() -> None:
+    if FENETRE is not None and FENETRE.poll() is None:
+        FENETRE.terminate()
+
+
 def ouvrir_fenetre() -> bool:
     """Ouvre la page dans sa propre fenêtre, sans barre d'adresse.
     Pas de subprocess.Popen : main.py le force sans fenêtre (CREATE_NO_WINDOW) et Chrome ne s'afficherait pas.
     Pas de raccourci non plus : Windows affichait un avertissement de sécurité à chaque ouverture (04/11)."""
+    if sys.platform != "win32":
+        return ouvrir_fenetre_posix()
     if not CHROME.exists():
         webbrowser.open(ADRESSE)
         return False

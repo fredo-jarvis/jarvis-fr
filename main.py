@@ -34,6 +34,11 @@ for _stream in ("stdout", "stderr"):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Journal des arrêts et des plantages natifs, activé le plus tôt possible (core/diag_arret.py).
+from core import diag_arret
+if __name__ == "__main__":
+    diag_arret.demarrer()
+
 import asyncio
 import re
 import threading
@@ -582,6 +587,21 @@ def _keep_context_of(exc: BaseException) -> bool:
     return True
 
 
+# Sous Linux, PortAudio/Pulse plante (segfault) si un flux est arrêté pendant qu'un autre
+# fil écrit dans un flux de sortie : on sérialise écriture, arrêt et fermeture.
+# Sous Windows le comportement reste inchangé (aucun verrou).
+if _platform.system() == "Windows":
+    import contextlib as _contextlib
+    _PA_VERROU = _contextlib.nullcontext()
+else:
+    _PA_VERROU = threading.RLock()
+
+
+def _ecrire_pa(stream, data: bytes) -> None:
+    with _PA_VERROU:
+        stream.write(data)
+
+
 class JarvisLive:
     def __init__(self, ui: JarvisUI):
         self.ui             = ui
@@ -1065,14 +1085,14 @@ class JarvisLive:
             await asyncio.wait_for(sauvegarde, timeout=2.5)
         except Exception:
             pass
-        _eteindre_tout()
+        _eteindre_tout("extinction_vocale_gemini")
 
     def _extinction_directe(self):
         if getattr(self, "_extinction_en_cours", False):
             return
         self._extinction_en_cours = True
         self.ui.write_log("SYS: Extinction demandée.")
-        threading.Timer(30.0, _eteindre_tout).start()
+        threading.Timer(30.0, _eteindre_tout, args=("filet_30s_extinction_vocale",)).start()
         asyncio.create_task(self._extinction_propre())
 
 
@@ -1085,7 +1105,7 @@ class JarvisLive:
                     if self._voix_locale:
                         self._voix_locale.dire("Au revoir.")
                 finally:
-                    _eteindre_tout()
+                    _eteindre_tout("extinction_locale")
             threading.Thread(target=_au_revoir, daemon=True, name="extinction-locale").start()
             return
         voulu = cerveau_local.changement_demande(text)
@@ -1149,7 +1169,10 @@ class JarvisLive:
             return "off"
 
         if self._ptt is None:
-            self._ptt = PushToTalk(self._on_ptt)
+            import os as _os
+            from core.hotkey import chord_from_text
+            # Touche configurable : variable d'environnement JARVIS_PTT_CHORD (ex. « ctrl+f9 »).
+            self._ptt = PushToTalk(self._on_ptt, chord_from_text(_os.environ.get("JARVIS_PTT_CHORD")))
         scope = self._ptt.start()
         # A window-scoped chord is a real limitation, not a detail — say it once
         # in the log so nobody wonders why it does nothing while another app is
@@ -1158,7 +1181,8 @@ class JarvisLive:
             self.ui.write_log(
                 f"SYS: Push-to-talk on — hold {self._ptt.label}"
                 + ("." if scope == "global"
-                   else " (works while this window is focused)."))
+                   else " (works while this window is focused)."
+                   + (f" {self._ptt.etat_portail}" if self._ptt.etat_portail else "")))
         except Exception:
             pass
         return scope
@@ -1658,7 +1682,7 @@ class JarvisLive:
                 self._extinction_en_cours = True
                 # Filet de sécurité : quoi qu'il arrive, Jarvis se ferme au bout de 30 s (40 s avant le 28/10).
                 import threading as _th
-                _secours = _th.Timer(30.0, _eteindre_tout)
+                _secours = _th.Timer(30.0, _eteindre_tout, args=("filet_30s_outil_shutdown",))
                 _secours.daemon = True
                 _secours.start()
                 async def _do_shutdown():
@@ -1687,7 +1711,7 @@ class JarvisLive:
                         await asyncio.wait_for(sauvegarde, timeout=2.0)
                     except Exception:
                         pass
-                    _eteindre_tout()
+                    _eteindre_tout("outil_shutdown_jarvis")
                 asyncio.create_task(_do_shutdown())
                 result = ("Shutdown in progress. Say ONE short goodbye sentence now, only one, "
                           "then nothing else. Do not call any tool.")
@@ -1930,10 +1954,15 @@ class JarvisLive:
                 )
                 _mic_stream = _open_mic(None)
 
-            with _mic_stream:
+            _mic_stream.start()
+            try:
                 print("[JARVIS] 🎤 Mic stream open")
                 while True:
                     await asyncio.sleep(0.1)
+            finally:
+                with _PA_VERROU:
+                    _mic_stream.stop()
+                    _mic_stream.close()
         except Exception as e:
             print(f"[JARVIS] ❌ Mic: {e}")
             raise
@@ -2254,7 +2283,7 @@ class JarvisLive:
                         self._tele_curseur = max(_maint, self._tele_curseur) + len(batch) / 2 / RECEIVE_SAMPLE_RATE
                         await asyncio.sleep(max(0.0, self._tele_curseur - _maint - 0.4))
                     else:
-                        await asyncio.to_thread(stream.write, bytes(batch))
+                        await asyncio.to_thread(_ecrire_pa, stream, bytes(batch))
                 except (RuntimeError, asyncio.CancelledError):
                     break   # executor shutting down — exit cleanly
         except Exception as e:
@@ -2262,8 +2291,9 @@ class JarvisLive:
             raise
         finally:
             self.set_speaking(False)
-            stream.stop()
-            stream.close()
+            with _PA_VERROU:
+                stream.stop()
+                stream.close()
 
     # ── Morning briefing ────────────────────────────────────────────────────────
 
@@ -2907,13 +2937,17 @@ class JarvisLive:
             print(f"[JARVIS] Reconnecting in {delay}s...")
             await asyncio.sleep(delay)
 
-def _eteindre_tout():
+def _eteindre_tout(motif: str = "non_precise"):
     """Ferme la fenêtre de la galaxie, puis Jarvis. os._exit ne laisse rien se fermer tout seul :
-    sans ça, la galaxie restait à l'écran et Jarvis semblait toujours allumé (04/11)."""
+    sans ça, la galaxie restait à l'écran et Jarvis semblait toujours allumé (04/11).
+    `motif` ne sert qu'au journal d'arrêt (core/diag_arret.py)."""
     import os as _os
+    diag_arret.tracer_arret(motif)
     try:
         from galaxie import placement
         placement.fermer_fenetre_jarvis()
+        from galaxie import server as _server
+        _server.fermer_fenetre_posix()
         time.sleep(0.4)
     except Exception:
         pass
@@ -2939,6 +2973,13 @@ def _relier_galaxie(jarvis, ui):
     coin = (g.x(), g.y()) if g is not None else None
 
     def ouvrir():
+        if sys.platform != "win32":             # pas de placement par écran hors Windows : on suit le processus Chrome
+            try:
+                if _galaxie.ouvrir_fenetre_posix() and _galaxie.attendre_fenetre_posix():
+                    _eteindre_tout("fenetre_chrome_fermee")
+            except Exception as e:
+                print(f"[Galaxie] fenêtre non ouverte : {e!r}")
+            return
         try:
             if not _galaxie.ouvrir_fenetre():
                 return
@@ -2953,7 +2994,7 @@ def _relier_galaxie(jarvis, ui):
             webbrowser.open(_galaxie.ADRESSE)
             return
         placement.Fenetre(h).attendre()
-        _eteindre_tout()                        # fermer la galaxie éteint Jarvis
+        _eteindre_tout("fenetre_galaxie_fermee")   # fermer la galaxie éteint Jarvis
 
     threading.Thread(target=ouvrir, daemon=True, name="galaxie-fenetre").start()
 
@@ -2963,6 +3004,9 @@ def main():
     def runner():
         ui.wait_for_api_key()
         jarvis = JarvisLive(ui)
+        diag_arret.fournir_etat(lambda: {"cerveau": getattr(jarvis, "_cerveau", "?"),
+                                         "connecte": getattr(jarvis, "session", None) is not None,
+                                         "extinction_en_cours": bool(getattr(jarvis, "_extinction_en_cours", False))})
         try:
             _relier_galaxie(jarvis, ui)
         except Exception as e:                  # jamais une page ne doit empêcher Jarvis de démarrer

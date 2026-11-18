@@ -87,6 +87,14 @@ def _compress(img_bytes: bytes, source_format: str = "PNG") -> tuple[bytes, str]
 
 def _capture_screen() -> tuple[bytes, str]:
 
+    from core import wayland_capture
+    if wayland_capture.actif():
+        # Wayland : mss ne peut pas lire l'écran, on passe par le portail XDG (CaptureErreur explicite).
+        import io
+        buf = io.BytesIO()
+        wayland_capture.capturer().save(buf, "PNG")
+        return _compress(buf.getvalue(), "PNG")
+
     if not _MSS:
         raise RuntimeError("mss is not installed. Run: pip install mss")
 

@@ -81,7 +81,19 @@ def _get_api_key() -> str:
         return ""
 
 
+_derniere_erreur_capture = ""
+
+
 def _grab_screenshot():
+    global _derniere_erreur_capture
+    from core import wayland_capture
+    if wayland_capture.actif():
+        _derniere_erreur_capture = ""
+        try:
+            return wayland_capture.capturer()
+        except wayland_capture.CaptureErreur as e:
+            _derniere_erreur_capture = str(e)
+            return None
     try:
         import mss
         from PIL import Image
@@ -375,7 +387,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if not query:
         return "What are you trying to find on screen?"
     try:
-        import mss  # noqa: F401
+        from core import wayland_capture
+        if not wayland_capture.actif():
+            import mss  # noqa: F401
         from PIL import Image  # noqa: F401
     except ImportError:
         return "I need mss and Pillow to annotate the screen."
@@ -392,7 +406,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
     shot = _grab_screenshot()
     if shot is None:
-        return "I couldn't capture a screenshot, sorry."
+        return _derniere_erreur_capture or "I couldn't capture a screenshot, sorry."
     _log("JARVIS: je regarde l'écran…")
     t0 = _time.time()
 

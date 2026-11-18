@@ -123,7 +123,7 @@ def _seances_et_sauvegardes(depot: Path, log: Path) -> list[dict]:
         sortie.append({"date": m.group(1), "type": m.group(2), "titre": m.group(3).strip()[:140]})
     try:
         r = subprocess.run(["git", "-C", str(depot), "log", "--format=%ad|%s", "--date=short", "-n", "400"],
-                           capture_output=True, text=True, encoding="utf-8", timeout=10, creationflags=0x08000000)
+                           capture_output=True, text=True, encoding="utf-8", timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         for ligne in r.stdout.splitlines():
             d, _, s = ligne.partition("|")
             if re.match(r"\d{4}-\d{2}-\d{2}$", d):

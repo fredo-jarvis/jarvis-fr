@@ -11,7 +11,9 @@ Ce mode ne sait pas agir sur le PC : il le dit plutôt que de faire semblant.
 import json
 import queue
 import re
+import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -258,7 +260,19 @@ def _jouer(son, taux: int, appareil, voix) -> None:
         return
     import sounddevice as sd
     sd.play(son, taux, device=appareil)
-    sd.wait()
+    if sys.platform == "win32":
+        sd.wait()
+        return
+    # Sous Linux (PortAudio/Pulse), sd.stop() depuis un autre fil pendant sd.wait() bloque : le fil qui joue s'arrête lui-même.
+    while sd.get_stream().active and not voix.coupe:
+        time.sleep(.02)
+    sd.stop()
+
+
+def _arreter_son() -> None:
+    if sys.platform == "win32":
+        import sounddevice as sd
+        sd.stop()
 
 
 class VoixPiper:
@@ -290,8 +304,7 @@ class VoixPiper:
     def couper(self):
         self.coupe = True
         if not self.muet:
-            import sounddevice as sd
-            sd.stop()
+            _arreter_son()
 
     def fermer(self):
         self.couper()
@@ -373,8 +386,7 @@ class VoixStudio:
     def couper(self):
         self.coupe = True
         if not self.muet:
-            import sounddevice as sd
-            sd.stop()
+            _arreter_son()
 
     def fermer(self):
         self.couper()
@@ -390,8 +402,57 @@ def nouvelle_voix(muet: bool = False, appareil=None, ouvrir: bool = True):
     try:
         return VoixPiper(muet=muet, appareil=appareil)
     except Exception as e:
+        if sys.platform != "win32":
+            print(f"[Voix locale] Piper indisponible, speech-dispatcher : {type(e).__name__}: {e}")
+            return VoixSpd(muet=muet)
         print(f"[Voix locale] Piper indisponible, voix de Windows : {type(e).__name__}: {e}")
         return VoixLocale(muet=muet)
+
+
+class VoixSpd:
+    """Secours sous Linux : speech-dispatcher (spd-say), phrase par phrase."""
+
+    def __init__(self, muet: bool = False):
+        self.muet = muet
+        self.exe = shutil.which("spd-say")
+        self.proc = None
+        self.coupe = False
+        self.verrou = threading.Lock()
+        if not self.exe:
+            print("[Voix locale] spd-say introuvable : pas de voix de secours (paquet speech-dispatcher).")
+
+    def dire(self, phrase: str) -> bool:
+        """Parle et attend la fin de la phrase. Rend faux si la voix a été coupée ou a échoué."""
+        phrase = " ".join((phrase or "").split())
+        if not phrase:
+            return True
+        if self.muet:
+            return True
+        if not self.exe:
+            return False
+        with self.verrou:
+            self.coupe = False
+            try:
+                self.proc = subprocess.Popen([self.exe, "-l", "fr", "-w", "--", phrase],
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                return False
+            proc = self.proc
+        return proc.wait() == 0 and not self.coupe
+
+    def couper(self):
+        self.coupe = True
+        with self.verrou:
+            proc, self.proc = self.proc, None
+        if proc and proc.poll() is None:
+            proc.kill()
+        if self.exe:
+            try:
+                subprocess.run([self.exe, "-C"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+    fermer = couper
 
 
 class VoixLocale:

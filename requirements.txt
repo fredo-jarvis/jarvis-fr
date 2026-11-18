@@ -79,6 +79,9 @@ wmi;        sys_platform == "win32"
 # game_updater (Steam's install dialog).
 pywinauto;  sys_platform == "win32"
 
+# ── Linux-only : trousseau de session (Secret Service / GNOME Keyring) pour core/coffre.py ──
+keyring;    sys_platform == "linux"
+
 # ── Documents, media & hardware readouts ──────────────────────────────────────
 # Also try/except-guarded at the point of use. They are declared because a
 # feature that silently does nothing is worse than a slightly longer install.
