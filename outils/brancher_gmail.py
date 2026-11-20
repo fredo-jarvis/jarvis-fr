@@ -40,17 +40,23 @@ cfg["gmail_adresse"] = adresse
 import sys
 sys.path.insert(0, str(CONFIG.parent.parent))
 from core import coffre
-chiffre = coffre.chiffrer(mdp)
-cfg.pop("gmail_mot_de_passe_app", None)
+chiffre, etat = coffre.proteger(mdp)
+ancienne_ref = str(cfg.get("gmail_mot_de_passe_app_chiffre", ""))
 if chiffre:
+    cfg.pop("gmail_mot_de_passe_app", None)
     cfg["gmail_mot_de_passe_app_chiffre"] = chiffre
 else:
-    cfg["gmail_mot_de_passe_app"] = mdp      # hors Windows : fichier réservé à ton compte (ci-dessous)
+    if ancienne_ref.startswith(coffre.PREFIXE_TROUSSEAU) or etat == "conflit":
+        # Jamais de clair à la place d'une référence au trousseau, ni d'écrasement d'une entrée différente.
+        print(f"\nTrousseau inaccessible ou entrée existante différente ({etat}) : rien n'a été modifié."
+              "\nDéverrouille le trousseau (ou supprime l'entrée « jarvis-fr » dans Mots de passe et clés) puis relance.")
+        input("\nAppuie sur Entrée pour fermer.")
+        raise SystemExit(1)
+    if sys.platform != "win32":
+        print(f"\n⚠ Trousseau indisponible ({etat}) : le mot de passe sera écrit EN CLAIR dans {CONFIG} (permissions 0600).")
+    cfg.pop("gmail_mot_de_passe_app_chiffre", None)
+    cfg["gmail_mot_de_passe_app"] = mdp      # repli : fichier réservé à ton compte (ci-dessous)
 CONFIG.parent.mkdir(parents=True, exist_ok=True)
-CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-try:
-    CONFIG.chmod(0o600)
-except Exception:
-    pass
+coffre.ecrire_atomique(CONFIG, json.dumps(cfg, indent=2, ensure_ascii=False))
 print("\nC'est branché ! Relance Jarvis et demande-lui : « j'ai des nouveaux mails ? »")
 input("\nAppuie sur Entrée pour fermer.")

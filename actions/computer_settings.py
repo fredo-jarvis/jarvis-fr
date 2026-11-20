@@ -1,6 +1,7 @@
 #computer_settings.py
 import json
 import re
+import shutil
 import sys
 import time
 import subprocess
@@ -58,6 +59,38 @@ def _get_macos_wifi_interface() -> str:
         pass
     return "en0" 
 
+_SINK = "@DEFAULT_AUDIO_SINK@"
+
+
+def _linux_volume(action: str, value: int | None = None):
+    """Volume Linux : wpctl (PipeWire) d'abord, pactl en repli. Renvoie le niveau 0-100 pour « get »."""
+    if shutil.which("wpctl"):
+        if action == "up":
+            cmd = ["wpctl", "set-volume", "-l", "1.0", _SINK, "10%+"]
+        elif action == "down":
+            cmd = ["wpctl", "set-volume", _SINK, "10%-"]
+        elif action == "mute":
+            cmd = ["wpctl", "set-mute", _SINK, "toggle"]
+        elif action == "set":
+            cmd = ["wpctl", "set-volume", "-l", "1.0", _SINK, f"{value}%"]
+        else:
+            r = subprocess.run(["wpctl", "get-volume", _SINK], capture_output=True, text=True, timeout=5)
+            m = re.search(r"Volume:\s*([\d.]+)", r.stdout)
+            return max(0, min(100, round(float(m.group(1)) * 100))) if m else None
+        subprocess.run(cmd, capture_output=True, timeout=5)
+        return None
+    cmd = {"up": ["set-sink-volume", "@DEFAULT_SINK@", "+10%"],
+           "down": ["set-sink-volume", "@DEFAULT_SINK@", "-10%"],
+           "mute": ["set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+           "set": ["set-sink-volume", "@DEFAULT_SINK@", f"{value}%"],
+           "get": ["get-sink-volume", "@DEFAULT_SINK@"]}[action]
+    r = subprocess.run(["pactl", *cmd], capture_output=True, text=True, timeout=5)
+    if action == "get":
+        m = re.search(r"(\d+)%", r.stdout)
+        return max(0, min(100, int(m.group(1)))) if m else None
+    return None
+
+
 def volume_up():
     if _OS == "Windows":
         for _ in range(5): pyautogui.press("volumeup")
@@ -66,8 +99,7 @@ def volume_up():
             "set volume output volume (output volume of (get volume settings) + 10)"],
             capture_output=True)
     else:
-        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+10%"],
-            capture_output=True)
+        _linux_volume("up")
 
 def volume_down():
     if _OS == "Windows":
@@ -77,8 +109,7 @@ def volume_down():
             "set volume output volume (output volume of (get volume settings) - 10)"],
             capture_output=True)
     else:
-        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-10%"],
-            capture_output=True)
+        _linux_volume("down")
 
 def volume_mute():
     if _OS == "Windows":
@@ -87,8 +118,7 @@ def volume_mute():
         subprocess.run(["osascript", "-e", "set volume with output muted"],
             capture_output=True)
     else:
-        subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
-            capture_output=True)
+        _linux_volume("mute")
 
 def volume_get() -> int | None:
     """Current master volume 0-100, or None if this platform will not say.
@@ -105,10 +135,7 @@ def volume_get() -> int | None:
             r = subprocess.run(["osascript", "-e", "output volume of (get volume settings)"],
                                capture_output=True, text=True, timeout=5)
             return max(0, min(100, int(r.stdout.strip())))
-        r = subprocess.run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
-                           capture_output=True, text=True, timeout=5)
-        m = re.search(r"(\d+)%", r.stdout)
-        return max(0, min(100, int(m.group(1)))) if m else None
+        return _linux_volume("get")
     except Exception:
         return None
 
@@ -167,8 +194,7 @@ def volume_set(value: int):
             capture_output=True)
         return
     else:
-        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{value}%"],
-            capture_output=True)
+        _linux_volume("set", value)
         return
 
 def _xrandr_brightness(delta: float) -> None:
@@ -250,6 +276,31 @@ def minimize_window():
     if _OS == "Darwin": pyautogui.hotkey("command", "m")
     else:               pyautogui.hotkey("win", "down")
 
+def _wayland_natif() -> bool:
+    """Session Linux Wayland : wmctrl/xdotool/pyautogui n'agissent que sur XWayland, jamais sur les fenêtres natives."""
+    if _OS != "Linux":
+        return False
+    try:
+        from core import wayland_input
+        return wayland_input.actif()
+    except Exception:
+        return False
+
+
+def _placement_wayland(nom: str, combo: tuple) -> str:
+    """Place la fenêtre ACTIVE par un raccourci GNOME envoyé via RemoteDesktop. Le résultat n'est jamais
+    vérifié : Jarvis ne peut ni choisir la fenêtre ni lire sa géométrie sous Wayland."""
+    try:
+        from core import wayland_input
+        ok, msg = wayland_input.garantir().combinaison(*combo)
+    except Exception:
+        return f"{nom} indisponible : erreur inattendue du clavier Wayland."
+    if not ok:
+        return f"{nom} indisponible sous Wayland : {msg or 'session RemoteDesktop non disponible.'}"
+    return (f"{nom} : raccourci GNOME {'+'.join(combo)} envoyé à la fenêtre active, résultat non vérifié "
+            "(dépend du focus et de l'état initial de la fenêtre ; Super+Gauche/Droite sont des bascules).")
+
+
 def maximize_window():
     if _OS == "Darwin":
         subprocess.run(["osascript", "-e",
@@ -258,6 +309,8 @@ def maximize_window():
             capture_output=True)
     elif _OS == "Windows":
         pyautogui.hotkey("win", "up")
+    elif _wayland_natif():
+        return _placement_wayland("maximize", ("super", "up"))
     else:
         try:
             subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"],
@@ -275,6 +328,8 @@ def snap_left():
         except Exception:
             pass
         pyautogui.hotkey("ctrl", "option", "left")
+    elif _wayland_natif():
+        return _placement_wayland("snap_left", ("super", "left"))
     else:  # Linux
         try:
             subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-e", "0,0,0,960,1080"],
@@ -291,6 +346,8 @@ def snap_right():
         except Exception:
             pass
         pyautogui.hotkey("ctrl", "option", "right")
+    elif _wayland_natif():
+        return _placement_wayland("snap_right", ("super", "right"))
     else:  # Linux
         try:
             subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-e", "0,960,0,960,1080"],
@@ -876,10 +933,14 @@ def computer_settings(
         _before = ("brightness", brightness_get())
 
     try:
-        func()
+        res = func()
     except Exception as e:
         print(f"[Settings] Action failed ({action}): {e}")
         return f"Action failed ({action}): {e}"
+
+    # Placement sous Wayland : message explicite (non vérifié ou indisponible), jamais « Done ».
+    if func in (maximize_window, snap_left, snap_right) and isinstance(res, str):
+        return res
 
     if _before:
         kind, old = _before

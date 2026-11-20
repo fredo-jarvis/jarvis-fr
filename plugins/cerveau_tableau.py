@@ -17,7 +17,7 @@ RACINE = Path(__file__).resolve().parent.parent
 SERVEUR = RACINE / "galaxie" / "server.py"
 ADRESSE = "http://localhost:4719/tableau"
 CHROME = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
-CREATE_NO_WINDOW = 0x08000000
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # 0x08000000 sous Windows, 0 ailleurs (creationflags y est refusé)
 
 PLUGIN = {
     "name": "cerveau_tableau",

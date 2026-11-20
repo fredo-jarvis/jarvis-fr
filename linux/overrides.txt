@@ -1,0 +1,6 @@
+# Utilisé par install.sh : uv pip install -r requirements.txt --overrides linux/overrides.txt
+#
+# pyautogui exige « python3-Xlib » sous Linux. Sur PyPI c'est une très ancienne version (0.15) qui
+# fournit le même module « Xlib » que python-xlib et entre en conflit avec lui.
+# On neutralise cette dépendance ; python-xlib (>=0.33) est déclaré dans requirements.txt.
+python3-xlib ; sys_platform == "never"

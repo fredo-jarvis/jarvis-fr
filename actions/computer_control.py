@@ -154,7 +154,31 @@ def _user_profile() -> dict:
         pass
     return {}
 
+def _wayland() -> bool:
+    """Session Linux Wayland : pyautogui n'atteint que les fenêtres XWayland, on passe par le portail
+    RemoteDesktop (core/wayland_input). Jamais vrai sous Windows."""
+    try:
+        from core import wayland_input
+        return wayland_input.actif()
+    except Exception:
+        return False
+
+
+def _wl(action: str, *args, **kw) -> tuple[bool, str]:
+    """Frappe via le portail. Ouvre la session à la première demande (fenêtre d'autorisation de GNOME),
+    puis la réutilise. Renvoie (ok, message explicite en cas d'échec) ; ne lève jamais."""
+    try:
+        from core import wayland_input
+        return getattr(wayland_input.garantir(), action)(*args, **kw)
+    except Exception:
+        return False, "Clavier Wayland impossible : erreur inattendue."
+
+
 def _type(text: str, interval: float = 0.03) -> str:
+    if _wayland():
+        time.sleep(0.3)
+        ok, msg = _wl("taper", text, interval)
+        return f"Typed: {text[:60]}{'…' if len(text) > 60 else ''}" if ok else msg
     _require_pyautogui()
     time.sleep(0.3)
     pyautogui.typewrite(text, interval=interval)
@@ -162,6 +186,14 @@ def _type(text: str, interval: float = 0.03) -> str:
 
 
 def _smart_type(text: str, clear_first: bool = True) -> str:
+    if _wayland():
+        if clear_first:
+            res = _clear_field()
+            if res != "Field cleared":
+                return res
+            time.sleep(0.1)
+        ok, msg = _wl("taper", text, 0.01)       # pas de presse-papiers : pyperclip est inutilisable sous Wayland
+        return f"Smart-typed: {text[:60]}{'…' if len(text) > 60 else ''}" if ok else msg
     _require_pyautogui()
     if clear_first:
         _clear_field()
@@ -178,7 +210,19 @@ def _smart_type(text: str, clear_first: bool = True) -> str:
     return f"Smart-typed: {text[:60]}{'…' if len(text) > 60 else ''}"
 
 
+_SANS_SOURIS_WL = ("{} indisponible sous Wayland : pyautogui n'atteint que les fenêtres XWayland et ne peut pas "
+                   "piloter les applications natives. Clics, déplacements, glisser-déposer et défilement "
+                   "ne sont pas pris en charge (aucune action effectuée).")
+
+
+def _sans_souris(nom: str) -> str | None:
+    """Message d'indisponibilité si la souris ne peut pas être pilotée (session Wayland), sinon None."""
+    return _SANS_SOURIS_WL.format(nom) if _wayland() else None
+
+
 def _click(x=None, y=None, button: str = "left", clicks: int = 1) -> str:
+    if (m := _sans_souris("clic")):
+        return m
     _require_pyautogui()
     if x is not None and y is not None:
         pyautogui.click(x, y, button=button, clicks=clicks)
@@ -188,18 +232,26 @@ def _click(x=None, y=None, button: str = "left", clicks: int = 1) -> str:
 
 
 def _hotkey(*keys) -> str:
+    if _wayland():
+        ok, msg = _wl("combinaison", *keys)
+        return f"Hotkey: {'+'.join(keys)}" if ok else msg
     _require_pyautogui()
     pyautogui.hotkey(*keys)
     return f"Hotkey: {'+'.join(keys)}"
 
 
 def _press(key: str) -> str:
+    if _wayland():
+        ok, msg = _wl("touche", key)
+        return f"Pressed: {key}" if ok else msg
     _require_pyautogui()
     pyautogui.press(key)
     return f"Pressed: {key}"
 
 
 def _scroll(direction: str = "down", amount: int = 3) -> str:
+    if (m := _sans_souris("défilement")):
+        return m
     _require_pyautogui()
     vertical   = direction in ("up", "down")
     clicks     = amount if direction in ("up", "right") else -amount
@@ -208,12 +260,16 @@ def _scroll(direction: str = "down", amount: int = 3) -> str:
 
 
 def _move(x: int, y: int, duration: float = 0.3) -> str:
+    if (m := _sans_souris("déplacement de la souris")):
+        return m
     _require_pyautogui()
     pyautogui.moveTo(x, y, duration=duration)
     return f"Mouse → ({x}, {y})"
 
 
 def _drag(x1: int, y1: int, x2: int, y2: int, duration: float = 0.5) -> str:
+    if (m := _sans_souris("glisser-déposer")):
+        return m
     _require_pyautogui()
     pyautogui.moveTo(x1, y1, duration=0.2)
     pyautogui.dragTo(x2, y2, duration=duration, button="left")
@@ -248,6 +304,13 @@ def _screenshot(save_path: str | None = None) -> str:
 
 
 def _clear_field() -> str:
+    if _wayland():
+        ok, msg = _wl("combinaison", "ctrl", "a")
+        if not ok:
+            return msg
+        time.sleep(0.1)
+        ok, msg = _wl("touche", "delete")
+        return "Field cleared" if ok else msg
     _require_pyautogui()
     select_key = "command" if _get_os() == "mac" else "ctrl"
     pyautogui.hotkey(select_key, "a")
@@ -257,6 +320,10 @@ def _clear_field() -> str:
 
 def _focus_window(title: str) -> str:
     os_name = _get_os()
+
+    if os_name == "linux" and _wayland():
+        return ("focus_window indisponible sous Wayland : wmctrl/xdotool ne voient que les fenêtres XWayland "
+                "et GNOME interdit de donner le focus à une fenêtre native (aucune action effectuée).")
 
     if os_name == "windows":
         try:

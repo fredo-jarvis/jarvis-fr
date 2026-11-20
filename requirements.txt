@@ -79,6 +79,14 @@ wmi;        sys_platform == "win32"
 # game_updater (Steam's install dialog).
 pywinauto;  sys_platform == "win32"
 
+# ── Linux-only : trousseau de session (Secret Service / GNOME Keyring) pour core/coffre.py ──
+keyring;    sys_platform == "linux"
+jeepney>=0.9,<1;       sys_platform == "linux"   # portails XDG (capture, raccourcis globaux, clavier Wayland)
+faster-whisper>=1.2,<2; sys_platform == "linux"  # reconnaissance vocale locale (core/oreilles_locales.py)
+piper-tts>=1.8,<2;      sys_platform == "linux"  # voix locale (core/cerveau_local.py)
+# pyautogui exige « python3-Xlib » (0.15, périmé) : install.sh l'exclut via linux/overrides.txt.
+python-xlib>=0.33;      sys_platform == "linux"
+
 # ── Documents, media & hardware readouts ──────────────────────────────────────
 # Also try/except-guarded at the point of use. They are declared because a
 # feature that silently does nothing is worse than a slightly longer install.

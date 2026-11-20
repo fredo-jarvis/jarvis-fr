@@ -23,7 +23,7 @@ sys.path.insert(0, str(RACINE))
 from core import coffre, confirm, garde_externe  # noqa: E402
 
 
-@unittest.skipUnless(coffre.disponible(), "chiffrement Windows seulement")
+@unittest.skipUnless(coffre._dpapi(), "chiffrement Windows seulement")
 class CoffreWindows(unittest.TestCase):
     def test_aller_retour(self):
         secret = "abcd efgh ijkl mnop"
@@ -37,7 +37,7 @@ class CoffreWindows(unittest.TestCase):
         self.assertIsNone(coffre.dechiffrer("en clair"))
 
 
-@unittest.skipUnless(coffre.disponible(), "chiffrement Windows seulement")
+@unittest.skipUnless(coffre._dpapi(), "chiffrement Windows seulement")
 class GmailPlusEnClair(unittest.TestCase):
     def test_ancienne_installation_migree(self):
         from plugins import gmail_lire

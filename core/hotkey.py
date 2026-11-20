@@ -68,6 +68,12 @@ def qt_sequence(chord=DEFAULT_CHORD) -> str:
     return "+".join(_QT_NAME.get(k, k.title()) for k in chord)
 
 
+def chord_from_text(texte: str | None, defaut=DEFAULT_CHORD) -> tuple:
+    """'ctrl+f9' -> ('ctrl','f9'). Texte invalide ou touche inconnue : défaut."""
+    noms = tuple(p.strip().lower() for p in (texte or "").split("+") if p.strip())
+    return noms if noms and all(n in _QT_NAME for n in noms) else tuple(defaut)
+
+
 class PushToTalk:
     """Calls `on_change(held: bool)` whenever the chord is pressed or released.
 
@@ -82,6 +88,7 @@ class PushToTalk:
         self._stop = threading.Event()
         self._held = False
         self._scope = "window"
+        self._portail = None        # RaccourciGlobal (Linux/Wayland)
 
     # ── state ───────────────────────────────────────────────────────────────
 
@@ -92,7 +99,17 @@ class PushToTalk:
     @property
     def scope(self) -> str:
         """'global' once a system-wide hook is running, else 'window'."""
+        if self._portail is not None:
+            return "global" if self._portail.etat == "actif" else "window"
         return self._scope
+
+    @property
+    def etat_portail(self) -> str:
+        """Message sur le raccourci global Wayland ('' hors Wayland)."""
+        if self._portail is None:
+            return ""
+        from core.wayland_shortcuts import ETATS
+        return ETATS.get(self._portail.etat, "")
 
     @property
     def label(self) -> str:
@@ -109,11 +126,29 @@ class PushToTalk:
             self._thread = threading.Thread(
                 target=self._poll_loop, name="push-to-talk", daemon=True)
             self._thread.start()
+        elif self._start_portail():
+            self._scope = "global"
         else:
             self._scope = "window"
-        return self._scope
+        return self.scope
+
+    def _start_portail(self) -> bool:
+        """Linux/Wayland : raccourci global via le portail XDG. Le raccourci de fenêtre Qt reste actif."""
+        try:
+            from core import wayland_shortcuts
+            if _OS != "Linux" or not wayland_shortcuts.actif():
+                return False
+            self._portail = wayland_shortcuts.RaccourciGlobal(self._set_held, self._chord)
+            # Attente courte : instantané si GNOME a déjà mémorisé le raccourci. Sinon l'enregistrement
+            # se poursuit en arrière-plan et `scope` passera à 'global' dès la validation.
+            return self._portail.demarrer(attente=3.0)
+        except Exception:
+            return False
 
     def stop(self) -> None:
+        if self._portail is not None:
+            p, self._portail = self._portail, None
+            p.arreter()
         self._stop.set()
         t, self._thread = self._thread, None
         if t is not None and t.is_alive():

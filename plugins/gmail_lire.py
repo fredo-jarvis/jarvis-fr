@@ -66,12 +66,13 @@ def _mot_de_passe(cfg: dict) -> str | None:
         return coffre.dechiffrer(chiffre)
     clair = cfg.get("gmail_mot_de_passe_app")
     if clair:
+        # Le clair n'est retiré qu'après stockage ET relecture exacte (Linux : trousseau) ; sinon il reste.
         nouveau = coffre.chiffrer(clair)
         if nouveau:
-            cfg["gmail_mot_de_passe_app_chiffre"] = nouveau
-            del cfg["gmail_mot_de_passe_app"]
+            nouvelle_cfg = {k: v for k, v in cfg.items() if k != "gmail_mot_de_passe_app"}
+            nouvelle_cfg["gmail_mot_de_passe_app_chiffre"] = nouveau
             try:
-                CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+                coffre.ecrire_atomique(CONFIG, json.dumps(nouvelle_cfg, indent=2, ensure_ascii=False))
             except Exception:
                 pass
     return clair

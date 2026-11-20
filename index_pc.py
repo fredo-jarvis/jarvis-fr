@@ -12,6 +12,7 @@ Relance-le quand tu veux rafraîchir l'index :
 """
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -78,7 +79,20 @@ def _scan_exes(root: Path, apps, seen, maxdepth, limit):
                 continue
 
 
+def collect_apps_linux(apps, seen):
+    """Applications Linux : fichiers .desktop (nom, nom français, type d'application)."""
+    from core import apps_linux
+    for app in apps_linux.lister():
+        for nom in app["names"] + app["generic"]:
+            cle = (nom + app["path"]).lower()
+            if cle not in seen and len(apps) < _MAX_APPS:
+                seen.add(cle)
+                apps.append({"name": nom, "path": app["path"]})
+
+
 def collect_apps(apps, seen):
+    if sys.platform.startswith("linux"):
+        return collect_apps_linux(apps, seen)
     # 1) Raccourcis du menu Démarrer (les plus fiables : nom + lanceur)
     start_menus = [
         Path(os.environ.get("ProgramData", "")) / "Microsoft/Windows/Start Menu/Programs",

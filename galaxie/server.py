@@ -9,7 +9,10 @@ aucune page extérieure : la galaxie s'affiche sans Internet.
 """
 import ctypes
 import json
+import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -246,6 +249,11 @@ class Page(BaseHTTPRequestHandler):
             except ValueError:
                 depuis = 0
             self._json(200, PONT.photo(depuis))
+        elif url.path == "/api/jarvis/audio":
+            if PONT is None:
+                self._json(409, {"erreur": "Jarvis n'est pas lancé."})
+                return
+            self._json(200, PONT.peripheriques())
         elif url.path == "/api/jarvis/son":
             if PONT is None:
                 self._json(409, {"erreur": "Jarvis n'est pas lancé."})
@@ -333,6 +341,9 @@ class Page(BaseHTTPRequestHandler):
             elif self.path == "/api/jarvis/couper":
                 PONT.couper()
                 self._json(200, {"ok": True})
+            elif self.path == "/api/jarvis/audio":
+                PONT.choisir_peripheriques(str(d.get("entree", "")), str(d.get("sortie", "")))
+                self._json(200, {"ok": True})
             elif self.path == "/api/jarvis/hologramme":
                 PONT.hologramme()
                 self._json(200, {"ok": True})
@@ -370,10 +381,121 @@ def arguments_chrome() -> str:
     return f'--app={ADRESSE} "--user-data-dir={profil}" --no-first-run --start-maximized'
 
 
+FENETRE = None             # hors Windows : le processus (Chrome ou Firefox isolé) qui porte la fenêtre de la galaxie
+FENETRE_ISOLEE = False     # vrai : FENETRE est un Firefox lancé par Jarvis dans son propre groupe de processus
+
+_PREFS_FIREFOX = (
+    'user_pref("browser.shell.checkDefaultBrowser", false);\n'
+    'user_pref("browser.startup.homepage_welcome_url", "");\n'
+    'user_pref("browser.aboutwelcome.enabled", false);\n'
+    'user_pref("datareporting.policy.dataSubmissionEnabled", false);\n'
+    'user_pref("browser.tabs.warnOnClose", false);\n'
+)
+
+
+def chrome_posix() -> str | None:
+    for nom in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        chemin = shutil.which(nom)
+        if chemin:
+            return chemin
+    return None
+
+
+def firefox_posix() -> str | None:
+    if Path("/snap/bin/firefox").exists():       # le lanceur direct du snap, sans le script /usr/bin/firefox
+        return "/snap/bin/firefox"
+    return shutil.which("firefox")
+
+
+def profil_firefox(exe: str) -> Path:
+    """Profil à part pour la galaxie : jamais le profil habituel de l'utilisateur.
+    Le Firefox en snap ne peut pas lire les dossiers cachés du dossier personnel : le profil va dans ~/snap/firefox/common."""
+    if exe.startswith("/snap/") or "/snap/" in str(Path(exe).resolve()):
+        return Path.home() / "snap" / "firefox" / "common" / "jarvis-fr-galaxie"
+    return Path.home() / ".local" / "state" / "jarvis-fr" / "firefox-galaxie"
+
+
+def _lancer_firefox_isole(exe: str) -> subprocess.Popen:
+    """--no-remote + profil dédié : une instance Firefox séparée, qui ne reprend jamais une fenêtre de l'utilisateur.
+    start_new_session : elle forme son propre groupe de processus, que Jarvis seul peut fermer."""
+    profil = profil_firefox(exe)
+    profil.mkdir(parents=True, exist_ok=True)
+    prefs = profil / "user.js"
+    if not prefs.exists():
+        prefs.write_text(_PREFS_FIREFOX, encoding="utf-8")
+    return subprocess.Popen([exe, "--no-remote", "--profile", str(profil), "--new-window", ADRESSE],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def ouvrir_fenetre_posix() -> bool:
+    """Linux et macOS : fenêtre dédiée à la galaxie, que Jarvis peut refermer.
+    Chrome/Chromium en mode « application » ; sinon Firefox isolé (profil et instance à part) ; sinon le navigateur
+    par défaut, qui reste hors de portée de Jarvis (rend faux : rien n'est refermé à l'arrêt)."""
+    global FENETRE, FENETRE_ISOLEE
+    exe = chrome_posix()
+    if exe is not None:
+        profil = ICI / ".fenetre-chrome"
+        FENETRE = subprocess.Popen([exe, f"--app={ADRESSE}", f"--user-data-dir={profil}", "--no-first-run",
+                                    "--start-maximized"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        FENETRE_ISOLEE = False
+        return True
+    ff = firefox_posix()
+    if ff is not None:
+        try:
+            lance = _lancer_firefox_isole(ff)
+            time.sleep(2.0)
+            if lance.poll() is None:
+                FENETRE, FENETRE_ISOLEE = lance, True
+                return True
+            print(f"[Galaxie] Firefox isolé arrêté tout de suite (code {lance.returncode}) : navigateur par défaut.")
+        except OSError as e:
+            print(f"[Galaxie] Firefox isolé non lancé : {e!r}")
+    webbrowser.open(ADRESSE)
+    return False
+
+
+def attendre_fenetre_posix() -> bool:
+    """Attend la fermeture de la fenêtre. Rend faux si le navigateur est reparti tout de suite : il a alors passé la main
+    à une fenêtre déjà ouverte avec ce profil, et ce n'est pas l'utilisateur qui a fermé la galaxie."""
+    if FENETRE is None:
+        return False
+    debut = time.time()
+    FENETRE.wait()
+    return time.time() - debut > 10
+
+
+def fermer_fenetre_posix() -> None:
+    """Ferme la fenêtre de la galaxie. Firefox isolé : seulement SON groupe de processus (jamais un autre Firefox)."""
+    f = FENETRE
+    if f is None or f.poll() is not None:
+        return
+    if not FENETRE_ISOLEE:
+        f.terminate()
+        return
+    try:
+        groupe = os.getpgid(f.pid)
+        proprietaire = groupe == f.pid and groupe != os.getpgrp()   # le groupe est bien le nôtre
+    except OSError:
+        return
+    if not proprietaire:
+        f.terminate()
+        return
+    try:
+        os.killpg(groupe, signal.SIGTERM)
+        try:
+            f.wait(timeout=2.5)
+        except subprocess.TimeoutExpired:
+            os.killpg(groupe, signal.SIGKILL)
+    except OSError:
+        pass
+
+
 def ouvrir_fenetre() -> bool:
     """Ouvre la page dans sa propre fenêtre, sans barre d'adresse.
     Pas de subprocess.Popen : main.py le force sans fenêtre (CREATE_NO_WINDOW) et Chrome ne s'afficherait pas.
     Pas de raccourci non plus : Windows affichait un avertissement de sécurité à chaque ouverture (04/11)."""
+    if sys.platform != "win32":
+        return ouvrir_fenetre_posix()
     if not CHROME.exists():
         webbrowser.open(ADRESSE)
         return False

@@ -75,6 +75,9 @@
   #interrupteurs { display: grid; gap: 7px; margin-top: 16px; }
   #interrupteurs button { display: flex; justify-content: space-between; padding: 7px 12px; background: var(--panneau); font: 600 10.5px/1.4 Consolas, monospace; letter-spacing: .1em; }
   #interrupteurs em { font-style: normal; font-weight: 400; color: var(--doux); }
+  #audio-choix { display: grid; gap: 6px; font: 10.5px/1.4 Consolas, monospace; color: var(--doux); }
+  #audio-choix[hidden] { display: none; }
+  #audio-choix select { width: 100%; margin-top: 3px; padding: 5px; background: var(--panneau); color: inherit; border: 1px solid rgba(255,255,255,.18); }
   #interrupteurs button.coupe { border-color: #ff3366; color: #ff3366; }
   #interrupteurs button.coupe em { color: #ff3366; font-weight: 600; }
 
@@ -170,6 +173,11 @@ body.tele #barre { display: none; }
     <button id="holo" type="button">HOLO <em>ouvrir</em></button>
     <button id="tableau" type="button" title="Tableau de bord du cerveau">TABLEAU <em>ouvrir</em></button>
     <button id="plein" type="button" aria-pressed="false">FOCUS <em id="plein-etat">off</em></button>
+    <button id="audio" type="button" title="Choisir le micro et la sortie audio">AUDIO <em>choisir</em></button>
+    <div id="audio-choix" hidden>
+      <label>Micro <select id="audio-entree"></select></label>
+      <label>Sortie <select id="audio-sortie"></select></label>
+    </div>
   </div>
 </div>
 
@@ -474,6 +482,26 @@ $("micro").onclick = async () => {
   if (!J.branche) return;
   try { await poster("/api/jarvis/muet", { muet: !J.muet }); suivre(); } catch (err) { ligne(err.message, "err"); }
 };
+async function remplirAudio() {
+  const d = await (await fetch("/api/jarvis/audio")).json();
+  if (d.erreur) throw new Error(d.erreur);
+  const garnir = (id, noms, choix) => {
+    const s = $(id); s.textContent = "";
+    ["", ...noms].forEach(n => { const o = document.createElement("option"); o.value = n; o.textContent = n || "Défaut du système"; s.append(o); });
+    s.value = noms.includes(choix) ? choix : "";
+  };
+  garnir("audio-entree", d.entrees, d.entree); garnir("audio-sortie", d.sorties, d.sortie);
+}
+$("audio").onclick = async () => {
+  if (!J.branche) return;
+  const z = $("audio-choix");
+  try { if (z.hidden) await remplirAudio(); z.hidden = !z.hidden; } catch (err) { ligne(err.message, "err"); }
+};
+const appliquerAudio = async () => {
+  try { await poster("/api/jarvis/audio", { entree: $("audio-entree").value, sortie: $("audio-sortie").value }); ligne("Audio mis à jour, la session se rouvre.", "sys"); }
+  catch (err) { ligne(err.message, "err"); }
+};
+$("audio-entree").onchange = $("audio-sortie").onchange = appliquerAudio;
 $("tableau").onclick = () => { location.href = "/tableau"; };   // tableau de bord (07/11/2026), retour par « GALAXIE DE JARVIS »
 $("modele").onclick = async () => {
   if (!J.branche) return;

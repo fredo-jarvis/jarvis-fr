@@ -24,7 +24,7 @@ from plugins._cerveau_commun import WIKI
 HOLO = Path(__file__).resolve().parent.parent / "holo"
 PORT = 4890
 ADRESSE = f"http://localhost:{PORT}/"
-CREATE_NO_WINDOW = 0x08000000
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # 0x08000000 sous Windows, 0 ailleurs (creationflags y est refusé)
 
 PLUGIN = {
     "name": "cerveau_hologramme",

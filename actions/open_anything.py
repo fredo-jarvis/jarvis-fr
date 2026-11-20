@@ -8,6 +8,7 @@ Action auto-découverte par core.action_loader (comme les autres actions).
 import difflib
 import json
 import os
+import sys
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
@@ -229,6 +230,9 @@ def _score(query: str, name: str) -> int:
 
 def _open(path: str) -> None:
     # os.startfile gère .exe, .lnk, dossier et fichier (comme un double-clic).
+    if sys.platform.startswith("linux"):
+        from core import apps_linux
+        return apps_linux.ouvrir(path)
     os.startfile(path)
 
 
