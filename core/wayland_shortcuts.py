@@ -24,7 +24,7 @@ _BUS = "org.freedesktop.portal.Desktop"
 _CHEMIN = "/org/freedesktop/portal/desktop"
 _IFACE = "org.freedesktop.portal.GlobalShortcuts"
 _ID = "jarvis-push-to-talk"
-APP_ID = "io.github.jeromecamilleri.JarvisFR"   # doit correspondre à un fichier .desktop de ce nom
+APP_ID = "io.github.fredo_jarvis.JarvisFR"   # doit correspondre à un fichier .desktop de ce nom
 _PAS = 0.5                 # période de contrôle de l'arrêt dans la boucle de réception
 
 _TOUCHES = {"ctrl": "CTRL", "shift": "SHIFT", "alt": "ALT", "space": "space", "f8": "F8",

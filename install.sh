@@ -8,7 +8,7 @@
 set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-APP_ID="io.github.jeromecamilleri.JarvisFR"
+APP_ID="io.github.fredo_jarvis.JarvisFR"   # identique à core/wayland_input.py et core/wayland_shortcuts.py
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 DESKTOP="$DATA_HOME/applications/$APP_ID.desktop"
 ICONE="$DATA_HOME/icons/hicolor/256x256/apps/$APP_ID.png"
@@ -106,7 +106,7 @@ for p in "${APT_FACULTATIFS[@]}"; do
 done
 [ "${#FACULTATIFS_MANQUANTS[@]}" -eq 0 ] || echo "  Facultatifs absents (non installés par ce script) : ${FACULTATIFS_MANQUANTS[*]}"
 command -v google-chrome >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1 \
-    || echo "  Aucun Chrome/Chromium détecté : les fonctions de navigateur en application en auront besoin."
+    || echo "  Aucun Chrome/Chromium détecté : la fenêtre Galaxie se rabattra sur une instance Firefox isolée (sinon sur le navigateur par défaut) ; les autres fonctions de navigateur en application auront besoin de Chrome ou Chromium."
 
 # ── 2. uv ────────────────────────────────────────────────────────────────────
 info "uv"
@@ -169,7 +169,7 @@ fi
 if [ -x "$VENV_PY" ]; then
     MODULES_MANQUANTS=()
     for m in PyQt6 sounddevice numpy google.genai jeepney keyring faster_whisper piper Xlib pyautogui; do
-        "$VENV_PY" -c "import $m" >/dev/null 2>&1 || MODULES_MANQUANTS+=("$m")
+        PYTHONDONTWRITEBYTECODE=1 "$VENV_PY" -c "import $m" >/dev/null 2>&1 || MODULES_MANQUANTS+=("$m")
     done
     if [ "${#MODULES_MANQUANTS[@]}" -eq 0 ]; then
         ok "Imports principaux : OK"
@@ -184,7 +184,7 @@ fi
 
 # ── 5. Lanceur GNOME ─────────────────────────────────────────────────────────
 info "Lanceur GNOME ($APP_ID)"
-chmod +x jarvis.sh install.sh uninstall.sh 2>/dev/null || true
+[ "$VERIFIER" -eq 1 ] || chmod +x jarvis.sh install.sh uninstall.sh 2>/dev/null || true
 CONTENU="$(sed -e "s|@DEPOT@|$DEPOT|g" -e "s|@ICONE@|$ICONE|g" linux/jarvis.desktop.in)"
 if [ "$VERIFIER" -eq 1 ]; then
     if [ -f "$DESKTOP" ] && [ "$(cat "$DESKTOP")" = "$CONTENU" ]; then

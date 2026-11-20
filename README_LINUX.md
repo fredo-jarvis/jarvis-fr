@@ -1,11 +1,18 @@
-# Jarvis FR sous Linux (Ubuntu 26.04 / GNOME Wayland)
+# Jarvis FR sous Linux (Ubuntu / GNOME Wayland)
 
-Testé sur Ubuntu 26.04, GNOME 50, session Wayland, Python 3.13.
+Ce portage vise **Ubuntu avec GNOME**, en priorité en session **Wayland**. Il n'est pas prévu pour d'autres
+distributions ou bureaux : `install.sh` repose sur `apt`, `dpkg`, le trousseau GNOME et `gio`.
+
+| Système | État |
+|---|---|
+| Ubuntu 26.04, GNOME 50, Wayland, Python 3.13 | testé |
+| Ubuntu 24.04 (GNOME 46) | essais partiels, **non validé** intégralement |
+| Autres distributions, KDE, X11 seul | non testé, non pris en charge |
 
 ## Installation
 
 ```bash
-git clone https://github.com/jeromecamilleri/jarvis-fr.git
+git clone https://github.com/fredo-jarvis/jarvis-fr.git
 cd jarvis-fr
 ./install.sh
 ```
@@ -42,7 +49,7 @@ N'installe donc pas les dépendances avec un simple `pip install -r requirements
 ```
 
 ou **« Jarvis FR »** dans la grille des applications GNOME. Le lanceur utilise l'identifiant
-`io.github.jeromecamilleri.JarvisFR`, requis par les portails XDG (raccourci push-to-talk, RemoteDesktop) :
+`io.github.fredo_jarvis.JarvisFR`, requis par les portails XDG (raccourci push-to-talk, RemoteDesktop) :
 **ne le renomme pas**.
 
 Variables optionnelles : `JARVIS_PTT_CHORD` (ex. `ctrl+f9`, touche push-to-talk), `JARVIS_STATE_DIR`,
@@ -50,6 +57,17 @@ Variables optionnelles : `JARVIS_PTT_CHORD` (ex. `ctrl+f9`, touche push-to-talk)
 
 Arrêt : dis « Jarvis, éteins-toi » ou ferme la fenêtre. Les traces d'arrêt sont dans
 `~/.local/state/jarvis-fr/logs/`.
+
+### Arrêt de Jarvis et fenêtre Galaxie
+
+- **À l'arrêt**, le processus Python, Galaxie et le Dashboard sont arrêtés.
+- **Avec Chrome ou Chromium** : fenêtre applicative dédiée (profil `.fenetre-chrome`), refermée par Jarvis.
+- **Sans Chrome ni Chromium, avec Firefox** : Jarvis lance sa propre instance Firefox (`--no-remote`, profil dédié
+  `~/snap/firefox/common/jarvis-fr-galaxie` pour le snap, sinon `~/.local/state/jarvis-fr/firefox-galaxie`). Ton profil
+  et tes fenêtres Firefox ne sont pas touchés. À l'arrêt, Jarvis ferme uniquement cette instance (son propre groupe de
+  processus). Fermer cette fenêtre éteint Jarvis, comme avec Chrome.
+- **Sans aucun des deux** (ou si Firefox ne démarre pas) : navigateur par défaut, hors de portée de Jarvis. L'onglet reste
+  ouvert avec « ARRÊTÉ » : ferme-le à la main. Jarvis ne ferme jamais les autres fenêtres du navigateur.
 
 ## Premier lancement
 
@@ -65,7 +83,7 @@ Arrêt : dis « Jarvis, éteins-toi » ou ferme la fenêtre. Les traces d'arrêt
 
 ## Limites sous Wayland
 
-Détails dans `AUDIT_LINUX.md`. En résumé : pas de clics à coordonnées, de focus de fenêtre native,
+En résumé : pas de clics à coordonnées, de focus de fenêtre native,
 d'enregistrement d'écran ni de presse-papiers pilotable ; ces fonctions répondent par un message explicite.
 Le placement de fenêtres envoie un raccourci GNOME à la fenêtre active, sans vérification du résultat.
 
@@ -76,6 +94,8 @@ Le placement de fenêtres envoie un raccourci GNOME à la fenêtre active, sans 
 ./uninstall.sh --supprimer-venv   # supprime aussi .venv
 ```
 
+Seul un lanceur créé par `install.sh` (marqueur `X-Jarvis-FR-Installateur=true`) est supprimé, même avec `--oui`.
+
 Ne sont **jamais** supprimés : `config/`, `memory/`, `modeles/`, `uploads/`, `cerveau-modele/`, les journaux,
 `~/.local/state/jarvis-fr/`, uv, Ollama, ni le dépôt.
 
@@ -84,4 +104,4 @@ Ne sont **jamais** supprimés : `config/`, `memory/`, `modeles/`, `uploads/`, `c
 - `./install.sh --verifier` : diagnostic sans modification.
 - `config/api_keys.json` en 664 : `chmod 600 config/api_keys.json` (install.sh le propose).
 - Pas de son : vérifie `wpctl status` et que `libportaudio2` est installé.
-- Push-to-talk inactif : vérifie que `~/.local/share/applications/io.github.jeromecamilleri.JarvisFR.desktop` existe.
+- Push-to-talk inactif : vérifie que `~/.local/share/applications/io.github.fredo_jarvis.JarvisFR.desktop` existe.

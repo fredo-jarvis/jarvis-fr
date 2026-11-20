@@ -35,7 +35,7 @@ from pathlib import Path
 _BUS = "org.freedesktop.portal.Desktop"
 _CHEMIN = "/org/freedesktop/portal/desktop"
 _IFACE = "org.freedesktop.portal.RemoteDesktop"
-APP_ID = "io.github.jeromecamilleri.JarvisFR"      # doit correspondre à un fichier .desktop de ce nom
+APP_ID = "io.github.fredo_jarvis.JarvisFR"      # doit correspondre à un fichier .desktop de ce nom
 _PAS = 0.05
 DELAI_AUTORISATION_S = 120.0
 

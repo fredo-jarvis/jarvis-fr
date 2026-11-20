@@ -7,7 +7,7 @@
 set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-APP_ID="io.github.jeromecamilleri.JarvisFR"
+APP_ID="io.github.fredo_jarvis.JarvisFR"   # identique à install.sh
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 DESKTOP="$DATA_HOME/applications/$APP_ID.desktop"
 ICONE="$DATA_HOME/icons/hicolor/256x256/apps/$APP_ID.png"
@@ -34,19 +34,21 @@ confirmer() {
 }
 
 echo "==> Lanceur GNOME"
+PROPRE=1
 if [ -f "$DESKTOP" ]; then
-    if grep -q '^X-Jarvis-FR-Installateur=true' "$DESKTOP" || confirmer "Ce lanceur n'a pas été créé par install.sh. Le supprimer quand même ?"; then
+    if grep -q '^X-Jarvis-FR-Installateur=true' "$DESKTOP"; then
         if confirmer "Supprimer $DESKTOP ?"; then
             rm -f "$DESKTOP"
             echo "  [ok] Lanceur supprimé"
         fi
     else
-        echo "  Lanceur conservé."
+        PROPRE=0
+        echo "  $DESKTOP n'a pas été créé par install.sh : conservé (supprime-le à la main si nécessaire)."
     fi
 else
     echo "  Aucun lanceur installé."
 fi
-if [ -f "$ICONE" ] && confirmer "Supprimer l'icône $ICONE ?"; then
+if [ "$PROPRE" -eq 1 ] && [ -f "$ICONE" ] && confirmer "Supprimer l'icône $ICONE ?"; then
     rm -f "$ICONE"
     echo "  [ok] Icône supprimée"
 fi
